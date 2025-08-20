@@ -47,4 +47,7 @@ coverage/
 
 # OS files
 .DS_Store
-Thumbs
+Thumbs.db
+
+# Logs from pm2
+pmlogs
