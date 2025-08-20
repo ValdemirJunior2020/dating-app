@@ -22,31 +22,26 @@ const firebaseConfig = {
   measurementId: "G-972PGXEDB3",
 };
 
-// Init
 const app = initializeApp(firebaseConfig);
 
 // Core
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Google provider
+// Google
 export const provider = new GoogleAuthProvider();
 export const signInWithGoogle = () => signInWithPopup(auth, provider);
 export const logOut = () => signOut(auth);
 
-// === Email/Password helpers (EXPORTS FIX) ===
+// Email/password helpers
 export async function emailSignUp(email, password) {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
-  try {
-    await sendEmailVerification(cred.user);
-  } catch {}
+  try { await sendEmailVerification(cred.user); } catch {}
   return cred;
 }
-
 export async function emailSignIn(email, password) {
   return signInWithEmailAndPassword(auth, email, password);
 }
-
 export async function sendReset(email) {
   return sendPasswordResetEmail(auth, email);
 }

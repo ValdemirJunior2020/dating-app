@@ -1,3 +1,4 @@
+// src/pages/EmailLogin.jsx
 import React, { useState } from "react";
 import { emailSignIn } from "../firebase";
 import { Link, Navigate, useLocation } from "react-router-dom";
@@ -43,7 +44,7 @@ export default function EmailLogin() {
   return (
     <div className="container py-5">
       <div className="mx-auto card card-soft p-4" style={{ maxWidth: 480 }}>
-        <h1 className="h4 mb-3 text-center">Log in</h1>
+        <h1 className="h4 mb-3 text-center">Log in with Email</h1>
         <form onSubmit={handleSubmit} className="d-grid gap-3">
           <div>
             <label className="form-label">Email</label>

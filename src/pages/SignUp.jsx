@@ -1,3 +1,4 @@
+// src/pages/SignUp.jsx
 import React, { useState } from "react";
 import { emailSignUp } from "../firebase";
 import { Link, Navigate } from "react-router-dom";
