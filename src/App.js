@@ -1,4 +1,3 @@
-// src/App.js
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 import NavBar from "./components/NavBar";
@@ -10,9 +9,9 @@ import RequireAuth from "./components/RequireAuth";
 import Browse from "./pages/Browse";
 import Matches from "./pages/Matches";
 import Chat from "./pages/Chat";
-import EmailLogin from "./pages/EmailLogin";
-import SignUp from "./pages/SignUp";
-import ResetPassword from "./pages/ResetPassword";
+import EmailLogin from "./pages/EmailLogin.jsx";     // <- explicit
+import SignUp from "./pages/SignUp.jsx";             // <- explicit
+import ResetPassword from "./pages/ResetPassword.jsx"; // <- explicit
 
 export default function App() {
   return (
@@ -25,39 +24,10 @@ export default function App() {
         <Route path="/login-email" element={<EmailLogin />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/reset" element={<ResetPassword />} />
-
-        <Route
-          path="/onboarding"
-          element={
-            <RequireAuth>
-              <Onboarding />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/browse"
-          element={
-            <RequireAuth>
-              <Browse />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/matches"
-          element={
-            <RequireAuth>
-              <Matches />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/chat/:matchId"
-          element={
-            <RequireAuth>
-              <Chat />
-            </RequireAuth>
-          }
-        />
+        <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
+        <Route path="/browse" element={<RequireAuth><Browse /></RequireAuth>} />
+        <Route path="/matches" element={<RequireAuth><Matches /></RequireAuth>} />
+        <Route path="/chat/:matchId" element={<RequireAuth><Chat /></RequireAuth>} />
       </Routes>
     </>
   );
