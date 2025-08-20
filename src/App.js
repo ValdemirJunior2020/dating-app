@@ -13,6 +13,7 @@ import Chat from "./pages/Chat";
 import EmailLogin from "./pages/EmailLogin.jsx";
 import SignUp from "./pages/SignUp.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
+import Settings from "./pages/Settings.jsx";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/browse" element={<RequireAuth><Browse /></RequireAuth>} />
         <Route path="/matches" element={<RequireAuth><Matches /></RequireAuth>} />
         <Route path="/chat/:matchId" element={<RequireAuth><Chat /></RequireAuth>} />
+        <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
       </Routes>
     </>
   );

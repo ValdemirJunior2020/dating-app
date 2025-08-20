@@ -28,6 +28,9 @@ export default function NavBar() {
               <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/matches" className="nav-link">Matches</NavLink></li>
               <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/canvas" className="nav-link">Lean Canvas</NavLink></li>
               <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/onboarding" className="nav-link">Onboarding</NavLink></li>
+              {user && (
+                <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/settings" className="nav-link">Settings</NavLink></li>
+              )}
               {!user ? (
                 <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/login" className="nav-link">Sign in</NavLink></li>
               ) : (
@@ -46,6 +49,7 @@ export default function NavBar() {
             <li className="nav-item"><NavLink to="/matches" className="nav-link">Matches</NavLink></li>
             <li className="nav-item"><NavLink to="/canvas" className="nav-link">Lean Canvas</NavLink></li>
             <li className="nav-item"><NavLink to="/onboarding" className="nav-link">Onboarding</NavLink></li>
+            {user && <li className="nav-item"><NavLink to="/settings" className="nav-link">Settings</NavLink></li>}
             {!user ? (
               <li className="nav-item"><NavLink to="/login" className="nav-link">Sign in</NavLink></li>
             ) : (
