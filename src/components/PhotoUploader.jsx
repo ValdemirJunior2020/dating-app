@@ -1,72 +1,66 @@
 import React, { useState } from "react";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { getFirestore, doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
+import { storage } from "../firebase";
 import { useAuth } from "../context/AuthContext";
+import { db } from "../firebase";
+import { doc, updateDoc, arrayUnion } from "firebase/firestore";
 
-const storage = getStorage();
-const db = getFirestore();
-
-export default function PhotoUploader() {
-  const { user } = useAuth();
-  const [files, setFiles] = useState([]);
+export default function PhotoUploader({ onUpload }) {
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const { user } = useAuth();
 
-  const handleFileChange = (e) => {
-    setFiles(Array.from(e.target.files));
-  };
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !user) return;
 
-  const handleUpload = async () => {
-    if (!user) {
-      alert("You must be logged in to upload photos");
-      return;
-    }
-
-    if (files.length === 0) {
-      alert("Please select at least one photo");
-      return;
-    }
+    const storageRef = ref(storage, `photos/${user.uid}/${Date.now()}-${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
     setUploading(true);
-    try {
-      const uid = user.uid;
-      const uploadPromises = files.map(async (file) => {
-        const fileRef = ref(storage, `photos/${uid}/${Date.now()}-${file.name}`);
-        await uploadBytes(fileRef, file);
-        return getDownloadURL(fileRef);
-      });
 
-      const urls = await Promise.all(uploadPromises);
+    uploadTask.on(
+      "state_changed",
+      (snapshot) => {
+        const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setProgress(pct);
+      },
+      (error) => {
+        console.error("Upload failed:", error);
+        setUploading(false);
+      },
+      async () => {
+        const url = await getDownloadURL(uploadTask.snapshot.ref);
 
-      await updateDoc(doc(db, "users", uid), {
-        photos: arrayUnion(...urls),
-        updatedAt: Date.now(),
-      });
+        // Save photo URL to Firestore
+        await updateDoc(doc(db, "users", user.uid), {
+          photos: arrayUnion(url),
+          updatedAt: Date.now(),
+        });
 
-      alert("Photos uploaded successfully!");
-      setFiles([]);
-    } catch (err) {
-      console.error("Upload error:", err);
-      alert("Failed to upload photos. See console for details.");
-    } finally {
-      setUploading(false);
-    }
+        onUpload(url);
+        setUploading(false);
+        setProgress(0);
+      }
+    );
   };
 
   return (
-    <div>
-      <input
-        type="file"
-        multiple
-        accept="image/*"
-        onChange={handleFileChange}
-      />
-      <button
-        onClick={handleUpload}
-        disabled={uploading}
-        style={{ marginLeft: "10px" }}
-      >
-        {uploading ? "Uploading..." : "Upload"}
-      </button>
+    <div className="border p-4 rounded bg-gray-50">
+      <label className="block font-semibold mb-2">Upload Photo</label>
+      <input type="file" accept="image/*" onChange={handleUpload} />
+
+      {uploading && (
+        <div className="mt-2">
+          <p>Uploading... {Math.round(progress)}%</p>
+          <div className="w-full bg-gray-200 h-2 rounded">
+            <div
+              className="bg-blue-500 h-2 rounded"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

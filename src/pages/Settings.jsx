@@ -1,170 +1,97 @@
-// src/pages/Settings.jsx
-import React, { useEffect, useState } from "react";
-import { getAuth } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../firebase";
-import PhotoUploader from "../components/PhotoUploader";
-import { cleanPhotos } from "../utils/cleanPhotos";
+import React, { useState, useEffect } from "react";
+import { auth, db, storage } from "../firebase"; // adjust path if needed
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-export default function Settings() {
-  const auth = getAuth();
-  const user = auth.currentUser;
+const Settings = () => {
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [file, setFile] = useState(null);
 
-  const [form, setForm] = useState({
-    displayName: "",
-    bio: "",
-    photos: [],
-  });
-  const [saving, setSaving] = useState(false);
-
-  // Load user profile
+  // Fetch user data from Firestore
   useEffect(() => {
-    const load = async () => {
+    const fetchData = async () => {
+      const user = auth.currentUser;
       if (!user) return;
-      const snap = await getDoc(doc(db, "users", user.uid));
+
+      const userRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userRef);
+
       if (snap.exists()) {
-        const d = snap.data();
-        setForm({
-          displayName: d.displayName || user.displayName || "",
-          bio: d.bio || "",
-          photos: cleanPhotos(d.photos),
-        });
-      } else {
-        setForm((s) => ({
-          ...s,
-          displayName: user.displayName || "",
-          photos: [],
-        }));
+        setUserData(snap.data());
       }
+      setLoading(false);
     };
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
 
-  const needMore = (form.photos?.length || 0) < 3;
+    fetchData();
+  }, []);
 
-  function handleUploaded(newUrls) {
-    setForm((s) => ({
-      ...s,
-      photos: cleanPhotos([...(s.photos || []), ...newUrls]),
-    }));
-  }
+  // Handle file selection
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
+  };
 
-  async function handleSave() {
-    if (!user) return;
-    if (needMore) {
-      alert("Please upload at least 3 photos before saving your profile.");
-      return;
-    }
+  // Upload photo to Firebase
+  const handlePhotoUpload = async () => {
+    const user = auth.currentUser;
+    if (!user || !file) return;
+
+    const storageRef = ref(storage, `photos/${user.uid}/${Date.now()}-${file.name}`);
+
     try {
-      setSaving(true);
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          uid: user.uid,
-          email: user.email || "",
-          displayName: form.displayName || "",
-          bio: form.bio || "",
-          photos: cleanPhotos(form.photos),
-          updatedAt: Date.now(),
-        },
-        { merge: true }
-      );
-      alert("Profile saved!");
-    } catch (e) {
-      console.error(e);
-      alert("Could not save profile.");
-    } finally {
-      setSaving(false);
+      // Upload file to storage
+      await uploadBytes(storageRef, file);
+
+      // Get downloadable URL
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Save the download URL in Firestore
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, {
+        photos: [downloadURL], // ✅ store actual URL instead of UID
+      });
+
+      alert("Photo uploaded successfully!");
+      setUserData((prev) => ({
+        ...prev,
+        photos: [downloadURL],
+      }));
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      alert("Failed to upload photo.");
     }
-  }
+  };
+
+  if (loading) return <p>Loading...</p>;
 
   return (
-    <div className="container py-4">
-      <h2 className="mb-3">Settings</h2>
+    <div className="settings">
+      <h1>Settings</h1>
 
-      {needMore && (
-        <div className="alert alert-warning">
-          Please upload at least <strong>3 photos</strong> to complete your
-          profile and be visible in Browse.
+      {userData && (
+        <div>
+          <p><strong>Name:</strong> {userData.displayName || "No name"}</p>
+          <p><strong>Email:</strong> {userData.email}</p>
+
+          {/* Show profile photo if exists */}
+          {userData.photos && userData.photos.length > 0 ? (
+            <img
+              src={userData.photos[0]}
+              alt="Profile"
+              style={{ width: "150px", borderRadius: "10px" }}
+            />
+          ) : (
+            <p>No photo uploaded.</p>
+          )}
+
+          <div style={{ marginTop: "20px" }}>
+            <input type="file" onChange={handleFileChange} />
+            <button onClick={handlePhotoUpload}>Upload Photo</button>
+          </div>
         </div>
       )}
-
-      <div className="card p-3 mb-3">
-        <div className="row g-3">
-          <div className="col-12 col-md-6">
-            <label className="form-label">Display Name</label>
-            <input
-              className="form-control"
-              value={form.displayName}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, displayName: e.target.value }))
-              }
-            />
-          </div>
-          <div className="col-12 col-md-6">
-            <label className="form-label">Email</label>
-            <input
-              className="form-control"
-              value={auth.currentUser?.email || ""}
-              readOnly
-            />
-          </div>
-          <div className="col-12">
-            <label className="form-label">Bio</label>
-            <textarea
-              className="form-control"
-              rows={3}
-              value={form.bio}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, bio: e.target.value }))
-              }
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Thumbnails */}
-      <div className="card p-3 mb-3">
-        <div className="mb-2">
-          <strong>Your photos</strong>
-        </div>
-        {form.photos?.length ? (
-          <div className="row g-2">
-            {form.photos.map((url, i) => (
-              <div className="col-4 col-sm-3 col-md-2" key={url}>
-                <img
-                  src={url}
-                  alt={`photo-${i}`}
-                  className="w-100 rounded"
-                  style={{ aspectRatio: "1/1", objectFit: "cover", cursor: "zoom-in" }}
-                  onClick={() => window.open(url, "_blank")}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-muted">No photos uploaded</div>
-        )}
-      </div>
-
-      {/* Uploader */}
-      <PhotoUploader
-        uid={user?.uid}
-        existing={form.photos}
-        onUploaded={handleUploaded}
-      />
-
-      <div className="mt-3">
-        <button
-          className="btn btn-primary btn-lg"
-          onClick={handleSave}
-          disabled={saving || needMore}
-          title={needMore ? "Upload at least 3 photos to enable saving" : ""}
-        >
-          {saving ? "Saving…" : "Save Profile"}
-        </button>
-      </div>
     </div>
   );
-}
+};
+
+export default Settings;
