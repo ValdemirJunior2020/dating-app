@@ -1,4 +1,3 @@
-// src/pages/EmailLogin.jsx
 import React, { useState } from "react";
 import { emailSignIn } from "../firebase";
 import { Link, Navigate, useLocation } from "react-router-dom";
@@ -7,12 +6,9 @@ import { useAuth } from "../context/AuthContext";
 const errMsg = (code) => {
   switch (code) {
     case "auth/user-not-found":
-    case "auth/wrong-password":
-      return "Invalid email or password.";
-    case "auth/invalid-email":
-      return "Please enter a valid email.";
-    default:
-      return "Login failed. Please try again.";
+    case "auth/wrong-password": return "Invalid email or password.";
+    case "auth/invalid-email": return "Please enter a valid email.";
+    default: return "Login failed. Please try again.";
   }
 };
 
@@ -20,7 +16,6 @@ export default function EmailLogin() {
   const { user } = useAuth();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/onboarding";
-
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
 
@@ -48,25 +43,13 @@ export default function EmailLogin() {
         <form onSubmit={handleSubmit} className="d-grid gap-3">
           <div>
             <label className="form-label">Email</label>
-            <input
-              name="email"
-              type="email"
-              className="form-control form-control-lg"
-              value={form.email}
-              onChange={onChange}
-              required
-            />
+            <input name="email" type="email" className="form-control form-control-lg"
+                   value={form.email} onChange={onChange} required />
           </div>
           <div>
             <label className="form-label">Password</label>
-            <input
-              name="password"
-              type="password"
-              className="form-control form-control-lg"
-              value={form.password}
-              onChange={onChange}
-              required
-            />
+            <input name="password" type="password" className="form-control form-control-lg"
+                   value={form.password} onChange={onChange} required />
           </div>
           <button className="btn btn-primary btn-lg" type="submit" disabled={loading}>
             {loading ? "Signing in…" : "Log in"}

@@ -1,4 +1,3 @@
-// src/pages/SignUp.jsx
 import React, { useState } from "react";
 import { emailSignUp } from "../firebase";
 import { Link, Navigate } from "react-router-dom";
@@ -47,36 +46,18 @@ export default function SignUp() {
         <form onSubmit={handleSubmit} className="d-grid gap-3">
           <div>
             <label className="form-label">Email</label>
-            <input
-              name="email"
-              type="email"
-              className="form-control form-control-lg"
-              value={form.email}
-              onChange={onChange}
-              required
-            />
+            <input name="email" type="email" className="form-control form-control-lg"
+                   value={form.email} onChange={onChange} required />
           </div>
           <div>
             <label className="form-label">Password</label>
-            <input
-              name="password"
-              type="password"
-              className="form-control form-control-lg"
-              value={form.password}
-              onChange={onChange}
-              required
-            />
+            <input name="password" type="password" className="form-control form-control-lg"
+                   value={form.password} onChange={onChange} required />
           </div>
           <div>
             <label className="form-label">Confirm password</label>
-            <input
-              name="confirm"
-              type="password"
-              className="form-control form-control-lg"
-              value={form.confirm}
-              onChange={onChange}
-              required
-            />
+            <input name="confirm" type="password" className="form-control form-control-lg"
+                   value={form.confirm} onChange={onChange} required />
           </div>
           <button className="btn btn-primary btn-lg" type="submit" disabled={loading}>
             {loading ? "Creating…" : "Sign up"}

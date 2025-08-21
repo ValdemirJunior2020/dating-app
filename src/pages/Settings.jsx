@@ -1,7 +1,6 @@
-// src/pages/Settings.jsx
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { db, uploadAvatar, ensureUserDoc } from "../firebase";
+import { db, ensureUserDoc, uploadAvatar } from "../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export default function Settings() {
@@ -23,19 +22,18 @@ export default function Settings() {
     if (!uid) return;
     let alive = true;
     (async () => {
-      // make sure doc exists so updateDoc won’t fail later
       await ensureUserDoc(uid, { email: user.email, name: user.displayName || "" });
       const snap = await getDoc(doc(db, "users", uid));
       if (!alive) return;
       if (snap.exists()) {
-        const data = snap.data();
+        const d = snap.data();
         setForm({
-          name: data.name || user.displayName || "",
-          age: data.age || "",
-          city: data.city || "",
-          interests: data.interests || "",
-          lookingFor: data.lookingFor || "",
-          photoURL: data.photoURL || user.photoURL || "",
+          name: d.name || user.displayName || "",
+          age: d.age || "",
+          city: d.city || "",
+          interests: d.interests || "",
+          lookingFor: d.lookingFor || "",
+          photoURL: d.photoURL || user.photoURL || "",
         });
       }
     })();
@@ -80,7 +78,6 @@ export default function Settings() {
       <h2 className="mb-3">Settings</h2>
 
       <div className="card card-soft p-3 p-md-4">
-        {/* Avatar */}
         <div className="d-flex align-items-center mb-3 gap-3">
           {form.photoURL ? (
             <img src={form.photoURL} alt="" className="avatar avatar-lg" />
@@ -97,7 +94,6 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Form */}
         <form className="row g-3" onSubmit={handleSave}>
           <div className="col-12">
             <label className="form-label">Name</label>

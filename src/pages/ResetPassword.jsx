@@ -1,4 +1,3 @@
-// src/pages/ResetPassword.jsx
 import React, { useState } from "react";
 import { sendReset } from "../firebase";
 import { Link } from "react-router-dom";
@@ -41,15 +40,10 @@ export default function ResetPassword() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="d-grid gap-3">
-            <div className="mb-2">
+            <div>
               <label className="form-label">Email</label>
-              <input
-                type="email"
-                className="form-control form-control-lg"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <input type="email" className="form-control form-control-lg"
+                     value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <button className="btn btn-primary btn-lg" type="submit" disabled={loading}>
               {loading ? "Sending…" : "Send reset link"}

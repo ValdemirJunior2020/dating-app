@@ -10,14 +10,16 @@ export default function Browse() {
   const { user } = useAuth();
   const myUid = user?.uid;
   const [profiles, setProfiles] = useState([]);
-  const [hidden, setHidden] = useState(new Set()); // uids hidden after like/skip
+  const [hidden, setHidden] = useState(new Set());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let alive = true;
 
     async function run() {
       try {
+        setError("");
         setLoading(true);
 
         // fetch my liked targets
@@ -36,6 +38,13 @@ export default function Browse() {
           (u) => u.uid && u.uid !== myUid && !prev.has(u.uid)
         );
         setProfiles(filtered);
+      } catch (e) {
+        console.error(e);
+        setError(
+          e?.message?.includes("Missing or insufficient permissions")
+            ? "We can’t load profiles due to Firestore permissions. Please verify your Firestore Rules and publish them."
+            : "Unable to load profiles. Please try again."
+        );
       } finally {
         if (alive) setLoading(false);
       }
@@ -75,7 +84,9 @@ export default function Browse() {
         </small>
       </div>
 
-      {visible.length === 0 && !loading ? (
+      {error && <div className="alert alert-danger">{error}</div>}
+
+      {!error && visible.length === 0 && !loading ? (
         <div className="alert alert-light">No more profiles for now.</div>
       ) : (
         <div className="row g-3">

@@ -2,54 +2,28 @@
 import React from "react";
 
 export default function UserCard({ user, onLike, onSkip }) {
-  const { uid, name, age, city, interests = "", lookingFor = "" } = user;
-
-  const chips = String(interests)
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-
   return (
-    <div className="card card-soft h-100">
-      <div className="card-body">
-        {/* Avatar initials */}
-        <div className="d-flex align-items-center mb-3">
-          <div
-            className="d-inline-flex align-items-center justify-content-center bg-primary text-white rounded-circle me-3"
-            style={{ width: 48, height: 48, fontWeight: 700 }}
-          >
-            {String(name || "?").slice(0, 1).toUpperCase()}
-          </div>
-          <div>
-            <div className="h6 mb-0">
-              {name || "Anonymous"} {age ? `· ${age}` : ""}
-            </div>
-            <small className="text-muted">{city || "Somewhere"}</small>
-          </div>
+    <div className="card shadow-sm">
+      {user.photoURL ? (
+        <img
+          src={user.photoURL}
+          alt={user.name}
+          className="card-img-top"
+          style={{ objectFit: "cover", height: "250px" }}
+        />
+      ) : (
+        <div className="bg-secondary text-white d-flex align-items-center justify-content-center"
+             style={{ height: "250px" }}>
+          No Photo
         </div>
+      )}
 
-        {lookingFor && (
-          <span className="badge text-bg-light border mb-2">{lookingFor}</span>
-        )}
-
-        {chips.length > 0 && (
-          <div className="mt-2">
-            {chips.map((c, i) => (
-              <span key={i} className="badge text-bg-secondary me-1 mb-1">
-                {c}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className="d-grid gap-2 mt-3">
-          <button className="btn btn-primary btn-lg" onClick={() => onLike(uid)}>
-            Like
-          </button>
-          <button className="btn btn-outline-secondary" onClick={() => onSkip(uid)}>
-            Pass
-          </button>
+      <div className="card-body">
+        <h5>{user.name}</h5>
+        <p className="text-muted">{user.age} • {user.bio}</p>
+        <div className="d-flex gap-2">
+          <button className="btn btn-success btn-sm" onClick={() => onLike(user.uid)}>❤️ Like</button>
+          <button className="btn btn-outline-secondary btn-sm" onClick={() => onSkip(user.uid)}>Skip</button>
         </div>
       </div>
     </div>
