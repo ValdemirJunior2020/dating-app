@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getFirestore, doc, updateDoc, arrayUnion } from "firebase/firestore";
-import { useAuth } from "../contexts/AuthContext"; // adjust import if different
+import { useAuth } from "../context/AuthContext";
 
 const storage = getStorage();
 const db = getFirestore();
 
 export default function PhotoUploader() {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
@@ -16,7 +16,7 @@ export default function PhotoUploader() {
   };
 
   const handleUpload = async () => {
-    if (!currentUser) {
+    if (!user) {
       alert("You must be logged in to upload photos");
       return;
     }
@@ -28,7 +28,7 @@ export default function PhotoUploader() {
 
     setUploading(true);
     try {
-      const uid = currentUser.uid;
+      const uid = user.uid;
       const uploadPromises = files.map(async (file) => {
         const fileRef = ref(storage, `photos/${uid}/${Date.now()}-${file.name}`);
         await uploadBytes(fileRef, file);
@@ -37,7 +37,6 @@ export default function PhotoUploader() {
 
       const urls = await Promise.all(uploadPromises);
 
-      // 🔑 Save URLs into Firestore
       await updateDoc(doc(db, "users", uid), {
         photos: arrayUnion(...urls),
         updatedAt: Date.now(),
