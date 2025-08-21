@@ -1,7 +1,10 @@
+// src/pages/Settings.jsx
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { db, ensureUserDoc, uploadAvatar } from "../firebase";
+import { db, ensureUserDoc } from "../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import PhotoUploader from "../components/PhotoUploader";
+import Lightbox from "../components/Lightbox";
 
 export default function Settings() {
   const { user } = useAuth();
@@ -13,10 +16,11 @@ export default function Settings() {
     city: "",
     interests: "",
     lookingFor: "",
-    photoURL: "",
+    photos: [],
   });
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [lbOpen, setLbOpen] = useState(false);
+  const [lbIndex, setLbIndex] = useState(0);
 
   useEffect(() => {
     if (!uid) return;
@@ -33,7 +37,7 @@ export default function Settings() {
           city: d.city || "",
           interests: d.interests || "",
           lookingFor: d.lookingFor || "",
-          photoURL: d.photoURL || user.photoURL || "",
+          photos: Array.isArray(d.photos) ? d.photos : [],
         });
       }
     })();
@@ -57,53 +61,59 @@ export default function Settings() {
     }
   }
 
-  async function handleFile(e) {
-    const f = e.target.files?.[0];
-    if (!f || !uid) return;
-    try {
-      setUploading(true);
-      const url = await uploadAvatar(uid, f);
-      setForm((s) => ({ ...s, photoURL: url }));
-    } catch (err) {
-      console.error(err);
-      alert("Upload failed.");
-    } finally {
-      setUploading(false);
-      e.target.value = "";
-    }
+  // called after uploads
+  function handleUploaded(urls) {
+    setForm((s) => ({ ...s, photos: [...(s.photos || []), ...urls] }));
   }
+
+  const needsMore = (form.photos?.length || 0) < 3;
 
   return (
     <div className="container py-4">
       <h2 className="mb-3">Settings</h2>
 
-      <div className="card card-soft p-3 p-md-4">
-        <div className="d-flex align-items-center mb-3 gap-3">
-          {form.photoURL ? (
-            <img src={form.photoURL} alt="" className="avatar avatar-lg" />
-          ) : (
-            <div className="initials avatar-lg bg-primary text-white d-flex align-items-center justify-content-center">
-              {String(form.name || user?.email || "?").slice(0,1).toUpperCase()}
-            </div>
-          )}
-          <div>
-            <label className="btn btn-outline-secondary btn-sm mb-0">
-              {uploading ? "Uploading…" : "Change photo"}
-              <input type="file" accept="image/*" hidden onChange={handleFile} />
-            </label>
-          </div>
+      {needsMore && (
+        <div className="alert alert-warning">
+          Please upload at least <strong>3 photos</strong> to make your profile visible.
         </div>
+      )}
 
+      {/* Photo gallery */}
+      <div className="card card-soft p-3 mb-3">
+        <div className="mb-2"><strong>Your photos</strong></div>
+        {form.photos?.length ? (
+          <div className="row g-2">
+            {form.photos.map((url, i) => (
+              <div className="col-4" key={url}>
+                <img
+                  src={url}
+                  alt=""
+                  className="w-100 rounded"
+                  style={{ aspectRatio: "1/1", objectFit: "cover", cursor: "zoom-in" }}
+                  onClick={() => { setLbIndex(i); setLbOpen(true); }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-muted">No photos yet.</div>
+        )}
+      </div>
+
+      <PhotoUploader uid={uid} existing={form.photos} onUploaded={handleUploaded} />
+
+      {/* Basic info form */}
+      <div className="card card-soft p-3 mt-3">
         <form className="row g-3" onSubmit={handleSave}>
           <div className="col-12">
             <label className="form-label">Name</label>
             <input name="name" className="form-control form-control-lg" value={form.name} onChange={onChange} />
           </div>
-          <div className="col-6 col-md-3">
+          <div className="col-6">
             <label className="form-label">Age</label>
             <input name="age" type="number" className="form-control form-control-lg" value={form.age} onChange={onChange} />
           </div>
-          <div className="col-6 col-md-3">
+          <div className="col-6">
             <label className="form-label">City</label>
             <input name="city" className="form-control form-control-lg" value={form.city} onChange={onChange} />
           </div>
@@ -127,6 +137,10 @@ export default function Settings() {
           </div>
         </form>
       </div>
+
+      {lbOpen && (
+        <Lightbox photos={form.photos} start={lbIndex} onClose={() => setLbOpen(false)} />
+      )}
     </div>
   );
 }

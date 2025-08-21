@@ -16,40 +16,36 @@ export default function Browse() {
 
   useEffect(() => {
     let alive = true;
-
     async function run() {
       try {
         setError("");
         setLoading(true);
 
-        // fetch my liked targets
         const prev = await fetchAlreadyLikedUids();
         if (!alive) return;
 
-        // fetch users
         const snap = await getDocs(collection(db, "users"));
         if (!alive) return;
-
         const rows = [];
         snap.forEach((d) => rows.push(d.data()));
 
-        // exclude me + anyone I've liked already
-        const filtered = rows.filter(
-          (u) => u.uid && u.uid !== myUid && !prev.has(u.uid)
-        );
+        const filtered = rows.filter((u) => {
+          const count = Array.isArray(u.photos) ? u.photos.length : 0;
+          return u.uid && u.uid !== myUid && !prev.has(u.uid) && count >= 3;
+        });
+
         setProfiles(filtered);
       } catch (e) {
         console.error(e);
         setError(
           e?.message?.includes("Missing or insufficient permissions")
-            ? "We can’t load profiles due to Firestore permissions. Please verify your Firestore Rules and publish them."
+            ? "We can’t load profiles due to Firestore permissions. Please verify and publish your rules."
             : "Unable to load profiles. Please try again."
         );
       } finally {
         if (alive) setLoading(false);
       }
     }
-
     if (myUid) run();
     return () => { alive = false; };
   }, [myUid]);
@@ -58,22 +54,11 @@ export default function Browse() {
     try {
       const res = await likeUser(targetUid);
       setHidden((s) => new Set(s).add(targetUid));
-      if (res.status === "matched") {
-        alert("🎉 It's a match!");
-      }
-    } catch (e) {
-      alert(e.message);
-    }
+      if (res.status === "matched") alert("🎉 It's a match!");
+    } catch (e) { alert(e.message); }
   }
-
-  function handleSkip(targetUid) {
-    setHidden((s) => new Set(s).add(targetUid));
-  }
-
-  const visible = useMemo(
-    () => profiles.filter((p) => !hidden.has(p.uid)),
-    [profiles, hidden]
-  );
+  const handleSkip = (uid) => setHidden((s) => new Set(s).add(uid));
+  const visible = useMemo(() => profiles.filter((p) => !hidden.has(p.uid)), [profiles, hidden]);
 
   return (
     <div className="container py-4">
