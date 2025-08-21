@@ -1,77 +1,72 @@
-// src/components/PhotoUploader.jsx
 import React, { useState } from "react";
-import { uploadPhotoToUser } from "../services/upload";
-import { db } from "../firebase";
-import { doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getFirestore, doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext"; // adjust import if different
 
-export default function PhotoUploader({ uid, existing = [], onUploaded }) {
+const storage = getStorage();
+const db = getFirestore();
+
+export default function PhotoUploader() {
+  const { currentUser } = useAuth();
   const [files, setFiles] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
-  async function handleUpload() {
-    if (!uid || files.length === 0) return;
-    setBusy(true);
+  const handleFileChange = (e) => {
+    setFiles(Array.from(e.target.files));
+  };
+
+  const handleUpload = async () => {
+    if (!currentUser) {
+      alert("You must be logged in to upload photos");
+      return;
+    }
+
+    if (files.length === 0) {
+      alert("Please select at least one photo");
+      return;
+    }
+
+    setUploading(true);
     try {
-      const urls = [];
-      for (const f of files) {
-        const { url } = await uploadPhotoToUser(uid, f, setProgress);
-        urls.push(url); // store URL only
-      }
+      const uid = currentUser.uid;
+      const uploadPromises = files.map(async (file) => {
+        const fileRef = ref(storage, `photos/${uid}/${Date.now()}-${file.name}`);
+        await uploadBytes(fileRef, file);
+        return getDownloadURL(fileRef);
+      });
+
+      const urls = await Promise.all(uploadPromises);
+
+      // 🔑 Save URLs into Firestore
       await updateDoc(doc(db, "users", uid), {
         photos: arrayUnion(...urls),
         updatedAt: Date.now(),
       });
-      onUploaded?.(urls);
-      setFiles([]);
-    } catch (e) {
-      console.error("UPLOAD ERROR", e.code, e.message);
-      alert("Upload failed: " + e.message);
-    } finally {
-      setBusy(false);
-      setProgress(0);
-    }
-  }
 
-  const minLeft = Math.max(0, 3 - (existing?.length || 0));
+      alert("Photos uploaded successfully!");
+      setFiles([]);
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Failed to upload photos. See console for details.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
-    <div className="card p-3">
-      <div className="mb-2 d-flex justify-content-between align-items-center">
-        <strong>Photos</strong>
-        <small className={minLeft > 0 ? "text-danger" : "text-muted"}>
-          {minLeft > 0
-            ? `Add ${minLeft} more to reach the minimum of 3`
-            : "Minimum reached"}
-        </small>
-      </div>
-
+    <div>
       <input
         type="file"
-        accept="image/*"
         multiple
-        className="form-control"
-        onChange={(e) => setFiles(Array.from(e.target.files))}
+        accept="image/*"
+        onChange={handleFileChange}
       />
-
-      {busy && (
-        <div className="progress my-2">
-          <div
-            className="progress-bar"
-            role="progressbar"
-            style={{ width: `${progress}%` }}
-          >
-            {progress}%
-          </div>
-        </div>
-      )}
-
       <button
-        className="btn btn-primary mt-2"
-        disabled={busy || files.length === 0}
         onClick={handleUpload}
+        disabled={uploading}
+        style={{ marginLeft: "10px" }}
       >
-        {busy ? "Uploading…" : "Upload"}
+        {uploading ? "Uploading..." : "Upload"}
       </button>
     </div>
   );
