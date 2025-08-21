@@ -4,6 +4,8 @@ import { Routes, Route } from "react-router-dom";
 
 // Layout
 import NavBar from "./components/NavBar";
+import Health from "./pages/Health.jsx";
+// ...
 
 // Public pages
 import Home from "./pages/Home";
@@ -45,6 +47,7 @@ export default function App() {
         <Route path="/login-email" element={<EmailLogin />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/reset" element={<ResetPassword />} />
+        <Route path="/health" element={<Health />} />
 
         {/* Protected */}
         <Route
