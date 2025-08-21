@@ -2,7 +2,8 @@
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
-// Layout
+import FixPhotos from "./pages/FixPhotos.jsx";
+// ...
 import NavBar from "./components/NavBar";
 import Health from "./pages/Health.jsx";
 // ...
@@ -42,10 +43,12 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/" element={<Home />} />
+        <Route path="/fix-photos" element={<RequireAuth><FixPhotos /></RequireAuth>} />
         <Route path="/canvas" element={<LeanCanvas />} />
         <Route path="/login" element={<Login />} />
         <Route path="/login-email" element={<EmailLogin />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/fix-photos" element={<RequireAuth><FixPhotos /></RequireAuth>} />
         <Route path="/reset" element={<ResetPassword />} />
         <Route path="/health" element={<Health />} />
 

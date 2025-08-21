@@ -1,10 +1,14 @@
-// src/pages/Browse.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import UserCard from "../components/UserCard";
 import { likeUser, fetchAlreadyLikedUids } from "../services/match";
+
+const cleanPhotos = (arr) =>
+  (Array.isArray(arr) ? arr : []).filter(
+    (u) => typeof u === "string" && u.includes("alt=media")
+  );
 
 export default function Browse() {
   const { user } = useAuth();
@@ -20,28 +24,18 @@ export default function Browse() {
       try {
         setError("");
         setLoading(true);
-
         const prev = await fetchAlreadyLikedUids();
-        if (!alive) return;
-
         const snap = await getDocs(collection(db, "users"));
-        if (!alive) return;
         const rows = [];
         snap.forEach((d) => rows.push(d.data()));
-
         const filtered = rows.filter((u) => {
-          const count = Array.isArray(u.photos) ? u.photos.length : 0;
+          const count = cleanPhotos(u.photos).length;
           return u.uid && u.uid !== myUid && !prev.has(u.uid) && count >= 3;
         });
-
-        setProfiles(filtered);
+        if (alive) setProfiles(filtered);
       } catch (e) {
         console.error(e);
-        setError(
-          e?.message?.includes("Missing or insufficient permissions")
-            ? "We can’t load profiles due to Firestore permissions. Please verify and publish your rules."
-            : "Unable to load profiles. Please try again."
-        );
+        setError("We can’t load profiles (check Firestore rules).");
       } finally {
         if (alive) setLoading(false);
       }
@@ -64,9 +58,7 @@ export default function Browse() {
     <div className="container py-4">
       <div className="d-flex align-items-center justify-content-between mb-3">
         <h2 className="mb-0">Browse</h2>
-        <small className="text-muted">
-          {loading ? "Loading…" : `${visible.length} profile(s)`}
-        </small>
+        <small className="text-muted">{loading ? "Loading…" : `${visible.length} profile(s)`}</small>
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}

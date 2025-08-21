@@ -1,16 +1,19 @@
-// src/components/UserCard.jsx
 import React, { useState } from "react";
 import Lightbox from "./Lightbox";
 
+const cleanPhotos = (arr) =>
+  (Array.isArray(arr) ? arr : []).filter(
+    (u) => typeof u === "string" && u.includes("alt=media")
+  );
+
 export default function UserCard({ user, onLike, onSkip }) {
-  const photos = Array.isArray(user.photos) ? user.photos : [];
+  const photos = cleanPhotos(user.photos);
   const primary = photos[0] || user.photoURL || null;
   const [open, setOpen] = useState(false);
   const [start, setStart] = useState(0);
 
   return (
     <div className="card shadow-sm">
-      {/* Main photo */}
       <div style={{ position: "relative", cursor: primary ? "zoom-in" : "default" }}>
         {primary ? (
           <img
@@ -21,8 +24,7 @@ export default function UserCard({ user, onLike, onSkip }) {
             onClick={() => { setStart(0); setOpen(true); }}
           />
         ) : (
-          <div className="bg-secondary text-white d-flex align-items-center justify-content-center"
-               style={{ height: "260px" }}>
+          <div className="bg-secondary text-white d-flex align-items-center justify-content-center" style={{ height: "260px" }}>
             No Photo
           </div>
         )}

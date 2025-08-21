@@ -24,18 +24,27 @@ export default function NavBar() {
           </div>
           <div className="offcanvas-body">
             <ul className="navbar-nav ms-auto">
-              <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/browse" className="nav-link">Browse</NavLink></li>
-              <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/matches" className="nav-link">Matches</NavLink></li>
-              <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/canvas" className="nav-link">Lean Canvas</NavLink></li>
-              <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/onboarding" className="nav-link">Onboarding</NavLink></li>
-              {user && (
-                <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/settings" className="nav-link">Settings</NavLink></li>
-              )}
+              <li className="nav-item" data-bs-dismiss="offcanvas">
+                <NavLink to="/browse" className="nav-link">Browse</NavLink>
+              </li>
+              <li className="nav-item" data-bs-dismiss="offcanvas">
+                <NavLink to="/onboarding" className="nav-link">Onboarding</NavLink>
+              </li>
+              <li className="nav-item" data-bs-dismiss="offcanvas">
+                <NavLink to="/matches" className="nav-link">Matches</NavLink>
+              </li>
+              <li className="nav-item" data-bs-dismiss="offcanvas">
+                <NavLink to="/settings" className="nav-link">Settings</NavLink>
+              </li>
               {!user ? (
-                <li className="nav-item" data-bs-dismiss="offcanvas"><NavLink to="/login" className="nav-link">Sign in</NavLink></li>
+                <li className="nav-item" data-bs-dismiss="offcanvas">
+                  <NavLink to="/login" className="nav-link">Sign in</NavLink>
+                </li>
               ) : (
                 <li className="nav-item">
-                  <button className="btn btn-outline-danger mt-2 mt-md-0" onClick={logOut}>Sign out</button>
+                  <button className="btn btn-outline-danger mt-2 mt-md-0" onClick={logOut}>
+                    Sign out
+                  </button>
                 </li>
               )}
             </ul>
@@ -46,16 +55,14 @@ export default function NavBar() {
         <div className="collapse navbar-collapse d-none d-md-block">
           <ul className="navbar-nav ms-auto align-items-center">
             <li className="nav-item"><NavLink to="/browse" className="nav-link">Browse</NavLink></li>
-            <li className="nav-item"><NavLink to="/matches" className="nav-link">Matches</NavLink></li>
-            <li className="nav-item"><NavLink to="/canvas" className="nav-link">Lean Canvas</NavLink></li>
             <li className="nav-item"><NavLink to="/onboarding" className="nav-link">Onboarding</NavLink></li>
-            {user && <li className="nav-item"><NavLink to="/settings" className="nav-link">Settings</NavLink></li>}
+            <li className="nav-item"><NavLink to="/matches" className="nav-link">Matches</NavLink></li>
+            <li className="nav-item"><NavLink to="/settings" className="nav-link">Settings</NavLink></li>
             {!user ? (
               <li className="nav-item"><NavLink to="/login" className="nav-link">Sign in</NavLink></li>
             ) : (
               <>
-                {user.photoURL ? <li className="nav-item"><img src={user.photoURL} alt="" className="avatar me-2" /></li> : null}
-                <li className="nav-item"><span className="nav-link text-muted">{user.displayName || user.email}</span></li>
+                <li className="nav-item"><span className="nav-link text-muted">{user.email}</span></li>
                 <li className="nav-item"><button className="btn btn-outline-danger ms-2" onClick={logOut}>Sign out</button></li>
               </>
             )}
