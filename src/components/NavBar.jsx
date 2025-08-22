@@ -54,6 +54,10 @@ export default function NavBar() {
         {/* Desktop (md+) */}
         <div className="collapse navbar-collapse d-none d-md-block">
           <ul className="navbar-nav ms-auto align-items-center">
+            <li className="nav-item">
+  <NavLink to="/profile" className="nav-link">Profile</NavLink>
+</li>
+
             <li className="nav-item"><NavLink to="/browse" className="nav-link">Browse</NavLink></li>
             <li className="nav-item"><NavLink to="/onboarding" className="nav-link">Onboarding</NavLink></li>
             <li className="nav-item"><NavLink to="/matches" className="nav-link">Matches</NavLink></li>
