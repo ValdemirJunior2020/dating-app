@@ -2,11 +2,7 @@
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
-import FixPhotos from "./pages/FixPhotos.jsx";
-// ...
 import NavBar from "./components/NavBar";
-import Health from "./pages/Health.jsx";
-// ...
 
 // Public pages
 import Home from "./pages/Home";
@@ -25,8 +21,9 @@ import Browse from "./pages/Browse";
 import Matches from "./pages/Matches";
 import Chat from "./pages/Chat";
 import Settings from "./pages/Settings.jsx";
+import Profile from "./pages/Profile";
 
-// (Optional) simple 404
+
 function NotFound() {
   return (
     <div className="container py-5">
@@ -43,16 +40,29 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/" element={<Home />} />
-        <Route path="/fix-photos" element={<RequireAuth><FixPhotos /></RequireAuth>} />
         <Route path="/canvas" element={<LeanCanvas />} />
         <Route path="/login" element={<Login />} />
         <Route path="/login-email" element={<EmailLogin />} />
         <Route path="/signup" element={<SignUp />} />
-        <Route path="/fix-photos" element={<RequireAuth><FixPhotos /></RequireAuth>} />
         <Route path="/reset" element={<ResetPassword />} />
-        <Route path="/health" element={<Health />} />
 
         {/* Protected */}
+        <Route
+          path="/profile"
+          element={
+            <RequireAuth>
+              <Profile />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/profile/:uid"
+          element={
+            <RequireAuth>
+              <Profile />
+            </RequireAuth>
+          }
+        />
         <Route
           path="/onboarding"
           element={

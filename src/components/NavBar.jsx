@@ -28,14 +28,18 @@ export default function NavBar() {
                 <NavLink to="/browse" className="nav-link">Browse</NavLink>
               </li>
               <li className="nav-item" data-bs-dismiss="offcanvas">
-                <NavLink to="/onboarding" className="nav-link">Onboarding</NavLink>
-              </li>
-              <li className="nav-item" data-bs-dismiss="offcanvas">
                 <NavLink to="/matches" className="nav-link">Matches</NavLink>
               </li>
-              <li className="nav-item" data-bs-dismiss="offcanvas">
-                <NavLink to="/settings" className="nav-link">Settings</NavLink>
-              </li>
+              {user && (
+                <>
+                  <li className="nav-item" data-bs-dismiss="offcanvas">
+                    <NavLink to="/profile" className="nav-link">My Profile</NavLink>
+                  </li>
+                  <li className="nav-item" data-bs-dismiss="offcanvas">
+                    <NavLink to="/settings" className="nav-link">Settings</NavLink>
+                  </li>
+                </>
+              )}
               {!user ? (
                 <li className="nav-item" data-bs-dismiss="offcanvas">
                   <NavLink to="/login" className="nav-link">Sign in</NavLink>
@@ -51,17 +55,17 @@ export default function NavBar() {
           </div>
         </div>
 
-        {/* Desktop (md+) */}
+        {/* Desktop */}
         <div className="collapse navbar-collapse d-none d-md-block">
           <ul className="navbar-nav ms-auto align-items-center">
-            <li className="nav-item">
-  <NavLink to="/profile" className="nav-link">Profile</NavLink>
-</li>
-
             <li className="nav-item"><NavLink to="/browse" className="nav-link">Browse</NavLink></li>
-            <li className="nav-item"><NavLink to="/onboarding" className="nav-link">Onboarding</NavLink></li>
             <li className="nav-item"><NavLink to="/matches" className="nav-link">Matches</NavLink></li>
-            <li className="nav-item"><NavLink to="/settings" className="nav-link">Settings</NavLink></li>
+            {user && (
+              <>
+                <li className="nav-item"><NavLink to="/profile" className="nav-link">My Profile</NavLink></li>
+                <li className="nav-item"><NavLink to="/settings" className="nav-link">Settings</NavLink></li>
+              </>
+            )}
             {!user ? (
               <li className="nav-item"><NavLink to="/login" className="nav-link">Sign in</NavLink></li>
             ) : (
