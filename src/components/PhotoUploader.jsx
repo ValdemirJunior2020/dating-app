@@ -4,18 +4,12 @@ import { auth, db, storage } from "../firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { doc, updateDoc, arrayUnion } from "firebase/firestore";
 
-// keep only valid Firebase download URLs
-const cleanPhotos = (arr) =>
-  (Array.isArray(arr) ? arr : []).filter(
-    (u) => typeof u === "string" && u.includes("alt=media")
-  );
-
 export default function PhotoUploader() {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function onPick() {
+  function onPick() {
     inputRef.current?.click();
   }
 
@@ -35,22 +29,16 @@ export default function PhotoUploader() {
     try {
       const urls = [];
       for (const file of files) {
-        // path: photos/<uid>/<timestamp>-<filename>
         const key = `photos/${me.uid}/${Date.now()}-${file.name}`;
         const fileRef = ref(storage, key);
-        // upload
+
         await new Promise((resolve, reject) => {
           const task = uploadBytesResumable(fileRef, file, {
             contentType: file.type || "application/octet-stream",
           });
-          task.on(
-            "state_changed",
-            () => {},
-            reject,
-            resolve
-          );
+          task.on("state_changed", () => {}, reject, resolve);
         });
-        // ✅ THIS is the correct URL to save
+
         const url = await getDownloadURL(fileRef);
         urls.push(url);
       }
@@ -61,7 +49,7 @@ export default function PhotoUploader() {
           updatedAt: Date.now(),
         });
       }
-      // Optionally: clear input
+
       e.target.value = "";
       alert("Uploaded!");
     } catch (err) {
