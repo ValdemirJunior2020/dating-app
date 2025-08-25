@@ -1,6 +1,6 @@
+// src/components/BrandName.jsx
 import React from "react";
-import "../styles/global.css";
 
-export default function BrandName() {
-  return <span className="brand-cursive">Candle Love</span>;
+export default function BrandName({ as: Tag = "span", className = "" }) {
+  return <Tag className={`brand-cursive ${className}`}>Candle Love</Tag>;
 }

@@ -1,0 +1,42 @@
+/* src/pages/Login.css */
+
+/* 1) Make the login page background a single chocolate tone and full height */
+#login-page {
+  background: #2a170f;                /* chocolate */
+  min-height: calc(100vh - 72px);     /* fill below navbar; adjust if your nav is taller/shorter */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 12px;
+}
+
+/* 2) Force high-contrast text inside the card */
+.auth-card {
+  color: #26221e;                      /* dark text for readability on white card */
+}
+
+.auth-card h1,
+.auth-card h2,
+.auth-card p,
+.auth-card label,
+.auth-card .form-text {
+  color: #26221e !important;
+  text-shadow: none !important;
+  opacity: 1 !important;
+}
+
+/* 3) Make links readable and on-brand */
+.auth-card a {
+  color: #d68a1a !important;           /* caramel */
+  font-weight: 600;
+}
+
+.auth-card a:hover {
+  color: #a96300 !important;
+  text-decoration: underline;
+}
+
+/* 4) Keep the Google/email buttons as-is, but ensure focus ring is visible */
+.auth-card .btn:focus {
+  box-shadow: 0 0 0 0.2rem rgba(214, 138, 26, 0.35);
+}

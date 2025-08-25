@@ -1,161 +1,200 @@
 // src/pages/SignUp.jsx
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { emailSignUp } from "../firebase";
-import { validateProfile } from "../utils/moderation";
+import { useLocation, Navigate, Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import BrandName from "../components/BrandName";
+import { auth, signInWithGoogle } from "../firebase";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+
+const friendly = (code) => {
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "That email is already in use. Try logging in instead.";
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/weak-password":
+      return "Please use a stronger password (at least 6 characters).";
+    case "auth/operation-not-allowed":
+      return "Email/Password sign-up is not enabled for this project.";
+    case "auth/popup-blocked":
+      return "Your browser blocked the popup. Allow popups or try again.";
+    case "auth/popup-closed-by-user":
+      return "Sign-in popup closed. Please try again.";
+    default:
+      return "Sign-up failed. Please try again.";
+  }
+};
 
 export default function SignUp() {
-  const nav = useNavigate();
-  const [form, setForm] = useState({
-    displayName: "",
-    email: "",
-    password: "",
-    confirm: "",
-    bio: "",
-  });
-  const [errors, setErrors] = useState({});
+  const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const from = location.state?.from?.pathname || "/onboarding";
+
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  function onChange(e) {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
+  if (user) return <Navigate to={from} replace />;
+
+  async function handleGoogle() {
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(friendly(err.code));
+      console.error(err);
+    }
   }
 
-  async function onSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    setErrors({});
+    setError("");
 
-    if (form.password.length < 6) {
-      setErrors({ password: "Password must be at least 6 characters." });
+    if (!displayName.trim()) {
+      setError("Please enter your name.");
       return;
     }
-    if (form.password !== form.confirm) {
-      setErrors({ confirm: "Passwords do not match." });
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
       return;
     }
-
-    const check = validateProfile({
-      displayName: form.displayName,
-      bio: form.bio,
-    });
-    if (!check.ok) {
-      setErrors(check.errors);
+    if (password !== confirm) {
+      setError("Passwords do not match.");
       return;
     }
 
+    setBusy(true);
     try {
-      setBusy(true);
-      await emailSignUp({
-        email: form.email,
-        password: form.password,
-        displayName: check.values.displayName,
-        about: check.values.bio, // stored as 'about'
-      });
-
-      // Tip: require photo upload after sign-up
-      nav("/settings"); // where your uploader is
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName: displayName.trim() });
+      // Onboarding page will create the Firestore doc if it doesn't exist
+      navigate(from, { replace: true });
     } catch (err) {
+      setError(friendly(err.code));
       console.error(err);
-      let msg = "Could not sign up. Please try again.";
-      if (err.code === "auth/email-already-in-use") msg = "Email already in use.";
-      if (err.code === "auth/invalid-email") msg = "Invalid email.";
-      if (err.code === "auth/weak-password") msg = "Weak password.";
-      setErrors({ _global: msg });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="container py-4" style={{ maxWidth: 520 }}>
-      <h1 className="h4 mb-3">Create your account</h1>
+    <main className="auth-page">
+      <div className="container bg-transparent">
+        <div
+          className="card shadow-sm p-4 auth-card mx-auto"
+          style={{ maxWidth: 520 }}
+        >
+          <h1 className="mb-3 text-center fw-semibold" style={{ letterSpacing: ".2px" }}>
+            Create your account on <BrandName />
+          </h1>
 
-      {errors._global && <div className="alert alert-danger">{errors._global}</div>}
-
-      <form onSubmit={onSubmit} noValidate>
-        <div className="mb-3">
-          <label className="form-label">Display name</label>
-          <input
-            type="text"
-            className={`form-control ${errors.displayName ? "is-invalid" : ""}`}
-            name="displayName"
-            value={form.displayName}
-            onChange={onChange}
-            placeholder="e.g., Ana, João, Taylor"
-            maxLength={40}
-            required
-          />
-          {errors.displayName && <div className="invalid-feedback">{errors.displayName}</div>}
-        </div>
-
-        <div className="mb-3">
-          <label className="form-label">Email address</label>
-          <input
-            type="email"
-            className={`form-control ${errors.email ? "is-invalid" : ""}`}
-            name="email"
-            value={form.email}
-            onChange={onChange}
-            placeholder="you@example.com"
-            required
-          />
-          {errors.email && <div className="invalid-feedback">{errors.email}</div>}
-        </div>
-
-        <div className="row">
-          <div className="col-12 col-md-6 mb-3">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className={`form-control ${errors.password ? "is-invalid" : ""}`}
-              name="password"
-              value={form.password}
-              onChange={onChange}
-              required
-            />
-            {errors.password && <div className="invalid-feedback">{errors.password}</div>}
+          <div className="d-grid gap-2 mb-3">
+            <button
+              type="button"
+              className="btn btn-primary btn-lg"
+              onClick={handleGoogle}
+              aria-label="Continue with Google"
+            >
+              Continue with Google
+            </button>
           </div>
-          <div className="col-12 col-md-6 mb-3">
-            <label className="form-label">Confirm password</label>
-            <input
-              type="password"
-              className={`form-control ${errors.confirm ? "is-invalid" : ""}`}
-              name="confirm"
-              value={form.confirm}
-              onChange={onChange}
-              required
-            />
-            {errors.confirm && <div className="invalid-feedback">{errors.confirm}</div>}
+
+          <div className="text-center my-2">
+            <small className="form-text">or sign up with email</small>
+          </div>
+
+          {error && (
+            <div className="alert alert-danger py-2" role="alert">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate>
+            <div className="mb-3">
+              <label htmlFor="su-name" className="form-label">
+                Name
+              </label>
+              <input
+                id="su-name"
+                type="text"
+                className="form-control"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name"
+                autoComplete="name"
+                required
+              />
+            </div>
+
+            <div className="mb-3">
+              <label htmlFor="su-email" className="form-label">
+                Email
+              </label>
+              <input
+                id="su-email"
+                type="email"
+                className="form-control"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <div className="mb-3">
+              <label htmlFor="su-pass" className="form-label">
+                Password
+              </label>
+              <input
+                id="su-pass"
+                type="password"
+                className="form-control"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                required
+              />
+            </div>
+
+            <div className="mb-3">
+              <label htmlFor="su-confirm" className="form-label">
+                Confirm Password
+              </label>
+              <input
+                id="su-confirm"
+                type="password"
+                className="form-control"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                required
+              />
+            </div>
+
+            <div className="d-grid">
+              <button
+                type="submit"
+                className="btn btn-primary btn-lg"
+                disabled={busy}
+              >
+                {busy ? "Creating account…" : "Create account"}
+              </button>
+            </div>
+          </form>
+
+          <div className="text-center mt-3">
+            <small className="form-text">
+              Already have an account? <Link to="/login">Log in</Link>
+            </small>
           </div>
         </div>
-
-        <div className="mb-3">
-          <label className="form-label">Bio (optional)</label>
-          <textarea
-            className={`form-control ${errors.bio ? "is-invalid" : ""}`}
-            name="bio"
-            rows={4}
-            value={form.bio}
-            onChange={onChange}
-            placeholder="Tell people a bit about you (no emails/links/phones)."
-            maxLength={300}
-          />
-          <div className="form-text">
-            English + Português: we’ll mask profanity and block contact info.
-          </div>
-          {errors.bio && <div className="invalid-feedback">{errors.bio}</div>}
-        </div>
-
-        <button type="submit" className="btn btn-primary w-100" disabled={busy}>
-          {busy ? "Creating…" : "Create account"}
-        </button>
-      </form>
-
-      <div className="text-center mt-3">
-        <small>
-          Already have an account? <Link to="/login">Sign in</Link>
-        </small>
       </div>
-    </div>
+    </main>
   );
 }

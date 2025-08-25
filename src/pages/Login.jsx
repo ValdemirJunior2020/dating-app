@@ -3,7 +3,7 @@ import React from "react";
 import { useLocation, Navigate, Link, useNavigate } from "react-router-dom";
 import { signInWithGoogle } from "../firebase";
 import { useAuth } from "../context/AuthContext";
-import BrandName from "../components/BrandName"; // ✅ import our brand component
+import BrandName from "../components/BrandName"; // cursive "Candle Love"
 
 const friendly = (code) => {
   switch (code) {
@@ -40,28 +40,46 @@ export default function Login() {
   }
 
   return (
-    <div className="container py-5">
-      <div className="mx-auto card card-soft p-4" style={{ maxWidth: 480 }}>
-        <h1 className="h4 mb-3 text-center">
-          Welcome to <BrandName /> {/* ✅ always cursive Candle Love */}
-        </h1>
+    // Uses .auth-page and .auth-card which are overridden in global.css
+    <main className="auth-page">
+      {/* bg-transparent prevents global .container dark panel on auth pages */}
+      <div className="container bg-transparent">
+        <div
+          className="card shadow-sm p-4 auth-card mx-auto"
+          style={{ maxWidth: 520 }}
+        >
+          <h1 className="mb-3 text-center fw-semibold" style={{ letterSpacing: ".2px" }}>
+            Welcome to <BrandName />
+          </h1>
 
-        <div className="d-grid gap-2">
-          <button className="btn btn-primary btn-lg" onClick={handleGoogle}>
-            Continue with Google
-          </button>
-          <button className="btn btn-outline-secondary btn-lg" onClick={goEmail}>
-            Sign in with Email
-          </button>
-        </div>
+          <div className="d-grid gap-2">
+            <button
+              type="button"
+              className="btn btn-primary btn-lg"
+              onClick={handleGoogle}
+              aria-label="Continue with Google"
+            >
+              Continue with Google
+            </button>
 
-        <div className="text-center mt-3">
-          <small className="text-muted">
-            New here? <Link to="/signup">Create account</Link> ·{" "}
-            <Link to="/reset">Forgot password?</Link>
-          </small>
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-lg"
+              onClick={goEmail}
+              aria-label="Sign in with Email"
+            >
+              Sign in with Email
+            </button>
+          </div>
+
+          <div className="text-center mt-3">
+            <small className="form-text">
+              New here? <Link to="/signup">Create account</Link> ·{" "}
+              <Link to="/reset">Forgot password?</Link>
+            </small>
+          </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

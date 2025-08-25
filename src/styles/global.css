@@ -1,88 +1,43 @@
-/* src/styles/global.css */
-
-/* Apply the chocolate theme everywhere */
-body, html {
+/* === Auth Page Styling === */
+.auth-page {
+  background: #522703 !important; /* solid chocolate brown */
   min-height: 100vh;
-  background-color: var(--choco);   /* Solid chocolate background */
-  color: var(--text-light);         /* Default text color */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
-/* Force ALL page text to be light */
-body, html,
-.container,
-.card,
-.card-body,
-h1, h2, h3, h4, h5, h6,
-p, span, small, label,
-a, li, strong {
-  color: var(--text-light) !important;
+/* Auth Card overrides */
+.auth-card {
+  background: #fff;          /* white card */
+  color: #26221e !important; /* readable dark text */
+  text-shadow: none !important;
 }
 
-/* Override Bootstrap muted text */
-.text-muted {
-  color: var(--honey) !important;
+.auth-card h1,
+.auth-card h2,
+.auth-card p,
+.auth-card label {
+  color: #26221e !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
 }
 
-/* Default panels (used for Login, Sign Up, Settings, etc.) */
-.container, .card, .form-control, .modal-content {
-  background-color: var(--brown-800);
-  border-radius: 8px;
-}
-
-/* EXCEPTION: Home / Landing page should NOT show dark panel */
-.landing-root .container,
-.landing-root .card {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Inputs / Forms */
-.form-control {
-  background-color: var(--brown-900);
-  border: 1px solid var(--caramel);
-  color: var(--text-light);
-}
-.form-control:focus {
-  border-color: var(--amber);
-  box-shadow: 0 0 6px rgba(255, 158, 44, 0.6);
-  background-color: var(--brown-900);
-  color: var(--text-light);
-}
-
-/* Buttons */
-.btn-primary {
-  background: linear-gradient(180deg, var(--amber), var(--amber-deep));
-  border: none;
-  color: var(--brown-900);
+/* Links inside login card */
+.auth-card a {
+  color: #d68a1a !important; /* caramel accent */
   font-weight: 600;
 }
-.btn-primary:hover {
-  background: var(--amber-deep);
-  color: var(--text-light);
+.auth-card a:hover {
+  color: #a96300 !important;
+  text-decoration: underline;
 }
 
-.btn-outline-light {
-  border-color: var(--honey);
-  color: var(--honey);
-}
-.btn-outline-light:hover {
-  background: var(--honey);
-  color: var(--brown-900);
-}
-
-/* Logo glow on hover */
-.navbar-brand img {
-  transition: transform 0.2s ease, filter 0.2s ease;
-}
-.navbar-brand:hover img {
-  transform: scale(1.05);
-  filter: drop-shadow(0 0 8px var(--amber));
-}
+/* Brand wordmark (ensure it survives global !important light text) */
 .brand-cursive {
   font-family: 'Great Vibes', cursive;
   font-weight: 700;
-  color: var(--amber);
-  text-shadow: 0 0 4px rgba(216, 122, 18, 0.45); /* a bit tighter for readability */
+  color: var(--amber) !important;      /* on-brand and visible */
+  text-shadow: 0 0 4px rgba(216,122,18,0.45);
 }
-
