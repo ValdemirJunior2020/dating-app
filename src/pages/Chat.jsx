@@ -13,9 +13,7 @@ export default function Chat() {
       {matchId ? (
         <ChatWindow matchId={matchId} />
       ) : (
-        <p className="text-light">
-          Select a match to start chatting.
-        </p>
+        <p className="text-light">Select a match to start chatting.</p>
       )}
     </div>
   );

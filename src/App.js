@@ -1,36 +1,19 @@
-// src/App.js
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
 import NavBar from "./components/NavBar";
-
-// Public pages
-import Home from "./pages/Home";
-import LeanCanvas from "./pages/LeanCanvas";
-
-// Auth pages
-import Login from "./pages/Login";
-import EmailLogin from "./pages/EmailLogin.jsx";
-import SignUp from "./pages/SignUp.jsx";
-import ResetPassword from "./pages/ResetPassword.jsx";
-
-// Protected pages
 import RequireAuth from "./components/RequireAuth";
-import Onboarding from "./pages/Onboarding";
+
+import Home from "./pages/Home";
 import Browse from "./pages/Browse";
 import Matches from "./pages/Matches";
-import Chat from "./pages/Chat";
-import Settings from "./pages/Settings.jsx";
-import Profile from "./pages/Profile";
-
-function NotFound() {
-  return (
-    <div className="container py-5">
-      <h1 className="h4">Page not found</h1>
-      <p className="text-muted">The page you’re looking for doesn’t exist.</p>
-    </div>
-  );
-}
+import Online from "./pages/Online";
+import Chat from "./pages/Chat";              // <— uses :matchId OR plain /chat
+import Settings from "./pages/Settings";
+import Login from "./pages/Login";
+import SignUp from "./pages/SignUp";
+import EmailLogin from "./pages/EmailLogin";  // comment out if you don't have it
+import ResetPassword from "./pages/ResetPassword"; // comment out if you don't have it
 
 export default function App() {
   return (
@@ -39,37 +22,12 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/" element={<Home />} />
-        <Route path="/canvas" element={<LeanCanvas />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/login-email" element={<EmailLogin />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/login-email" element={<EmailLogin />} />
         <Route path="/reset" element={<ResetPassword />} />
 
-        {/* Protected */}
-        <Route
-          path="/profile"
-          element={
-            <RequireAuth>
-              <Profile />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/profile/:uid"
-          element={
-            <RequireAuth>
-              <Profile />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/onboarding"
-          element={
-            <RequireAuth>
-              <Onboarding />
-            </RequireAuth>
-          }
-        />
+        {/* Private */}
         <Route
           path="/browse"
           element={
@@ -86,7 +44,15 @@ export default function App() {
             </RequireAuth>
           }
         />
-        {/* ✅ Chat lobby and specific chats */}
+        <Route
+          path="/online"
+          element={
+            <RequireAuth>
+              <Online />
+            </RequireAuth>
+          }
+        />
+        {/* Chat list / placeholder */}
         <Route
           path="/chat"
           element={
@@ -95,6 +61,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+        {/* Chat thread by matchId (same component) */}
         <Route
           path="/chat/:matchId"
           element={
@@ -111,9 +78,6 @@ export default function App() {
             </RequireAuth>
           }
         />
-
-        {/* 404 */}
-        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   );

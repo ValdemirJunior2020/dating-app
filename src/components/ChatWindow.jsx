@@ -61,7 +61,7 @@ export default function ChatWindow({ matchId }) {
     }
   }
 
-  const otherName = other?.name || other?.uid || "New match";
+  const otherName = other?.name || other?.displayName || other?.uid || "New match";
   const otherInitial = String(otherName).slice(0, 1).toUpperCase();
 
   return (

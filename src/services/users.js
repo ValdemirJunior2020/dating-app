@@ -1,7 +1,7 @@
 // src/services/users.js
 import { collection, doc, getDoc, getDocs, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import cleanPhotos from "../utils/cleanPhotos";
+import cleanPhotos, { cleanPhotos as namedClean } from "../utils/cleanPhotos";
 
 /** Fetch one user's profile by uid */
 export async function getUserProfile(uid) {
@@ -11,15 +11,15 @@ export async function getUserProfile(uid) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** New rule: visible with >= 1 photo */
+/** Visible with >= 1 photo */
 export function isProfileVisible(userDoc) {
-  const photos = cleanPhotos(userDoc?.photos || []);
+  const photos = (cleanPhotos || namedClean)(userDoc?.photos || []);
   return photos.length >= 1;
 }
 
-/** Show a nudge if user has 1–2 photos */
+/** Nudge if 1–2 photos */
 export function needsPhotoEncouragement(userDoc) {
-  const photos = cleanPhotos(userDoc?.photos || []);
+  const photos = (cleanPhotos || namedClean)(userDoc?.photos || []);
   return photos.length > 0 && photos.length < 3;
 }
 
