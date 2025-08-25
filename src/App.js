@@ -23,7 +23,6 @@ import Chat from "./pages/Chat";
 import Settings from "./pages/Settings.jsx";
 import Profile from "./pages/Profile";
 
-
 function NotFound() {
   return (
     <div className="container py-5">
@@ -84,6 +83,15 @@ export default function App() {
           element={
             <RequireAuth>
               <Matches />
+            </RequireAuth>
+          }
+        />
+        {/* ✅ Chat lobby and specific chats */}
+        <Route
+          path="/chat"
+          element={
+            <RequireAuth>
+              <Chat />
             </RequireAuth>
           }
         />

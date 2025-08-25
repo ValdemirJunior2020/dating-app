@@ -18,6 +18,11 @@
   color: var(--text-light);
 }
 
+/* Force background color for ALL devices (desktop + mobile) */
+body, html {
+  background-color: var(--choco);
+}
+
 /* Mosaic grid */
 .mosaic {
   position: fixed;

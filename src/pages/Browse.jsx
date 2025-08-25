@@ -1,79 +1,52 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
-import { useAuth } from "../context/AuthContext";
+// src/pages/Browse.jsx
+import React, { useEffect, useState } from "react";
+import { fetchVisibleUsers } from "../services/users";
+import { likeUser } from "../services/match";
 import UserCard from "../components/UserCard";
-import { likeUser, fetchAlreadyLikedUids } from "../services/match";
-
-const cleanPhotos = (arr) =>
-  (Array.isArray(arr) ? arr : []).filter(
-    (u) => typeof u === "string" && u.includes("alt=media")
-  );
 
 export default function Browse() {
-  const { user } = useAuth();
-  const myUid = user?.uid;
-  const [profiles, setProfiles] = useState([]);
-  const [hidden, setHidden] = useState(new Set());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
-    let alive = true;
-    async function run() {
+    (async () => {
       try {
-        setError("");
-        setLoading(true);
-        const prev = await fetchAlreadyLikedUids();
-        const snap = await getDocs(collection(db, "users"));
-        const rows = [];
-        snap.forEach((d) => rows.push(d.data()));
-        const filtered = rows.filter((u) => {
-          const count = cleanPhotos(u.photos).length;
-          return u.uid && u.uid !== myUid && !prev.has(u.uid) && count >= 3;
-        });
-        if (alive) setProfiles(filtered);
-      } catch (e) {
-        console.error(e);
-        setError("We can’t load profiles (check Firestore rules).");
-      } finally {
-        if (alive) setLoading(false);
+        const list = await fetchVisibleUsers();
+        // normalize for our UI flags
+        setUsers(list.map(u => ({ ...u, matched: false, matchId: null })));
+      } catch (err) {
+        console.error("Failed to fetch users:", err);
       }
-    }
-    if (myUid) run();
-    return () => { alive = false; };
-  }, [myUid]);
+    })();
+  }, []);
 
-  async function handleLike(targetUid) {
+  async function handleLike(targetId) {
     try {
-      const res = await likeUser(targetUid);
-      setHidden((s) => new Set(s).add(targetUid));
-      if (res.status === "matched") alert("🎉 It's a match!");
-    } catch (e) { alert(e.message); }
+      const res = await likeUser(targetId); // returns {status, matchId}
+      setUsers(prev =>
+        prev.map(u =>
+          u.uid === targetId ? { ...u, matched: true, matchId: res.matchId } : u
+        )
+      );
+      // Optional toast/alert:
+      // if (res.status === "matched") alert("It’s a match! 🎉 You can now chat.");
+      // else alert("Chat opened. You can message now.");
+    } catch (err) {
+      console.error("Like failed:", err);
+      alert("Error liking user");
+    }
   }
-  const handleSkip = (uid) => setHidden((s) => new Set(s).add(uid));
-  const visible = useMemo(() => profiles.filter((p) => !hidden.has(p.uid)), [profiles, hidden]);
 
   return (
     <div className="container py-4">
-      <div className="d-flex align-items-center justify-content-between mb-3">
-        <h2 className="mb-0">Browse</h2>
-        <small className="text-muted">{loading ? "Loading…" : `${visible.length} profile(s)`}</small>
+      <h2 className="mb-4">Browse Profiles</h2>
+      <div className="row g-3">
+        {users.length === 0 && <p className="text-light">No more users to browse.</p>}
+        {users.map(u => (
+          <div key={u.uid} className="col-md-4">
+            <UserCard user={u} onLike={handleLike} />
+          </div>
+        ))}
       </div>
-
-      {error && <div className="alert alert-danger">{error}</div>}
-
-      {!error && visible.length === 0 && !loading ? (
-        <div className="alert alert-light">No more profiles for now.</div>
-      ) : (
-        <div className="row g-3">
-          {visible.map((u) => (
-            <div className="col-12 col-sm-6 col-lg-4" key={u.uid}>
-              <UserCard user={u} onLike={handleLike} onSkip={handleSkip} />
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

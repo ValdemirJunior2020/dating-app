@@ -1,19 +1,21 @@
+// src/components/UserCard.jsx
 import React, { useState } from "react";
 import Lightbox from "./Lightbox";
+import { Link } from "react-router-dom";
 
 const cleanPhotos = (arr) =>
   (Array.isArray(arr) ? arr : []).filter(
-    (u) => typeof u === "string" && u.includes("alt=media")
+    (u) => typeof u === "string" && (u.startsWith("http://") || u.startsWith("https://"))
   );
 
-export default function UserCard({ user, onLike, onSkip }) {
+export default function UserCard({ user, onLike }) {
   const photos = cleanPhotos(user.photos);
   const primary = photos[0] || user.photoURL || null;
   const [open, setOpen] = useState(false);
   const [start, setStart] = useState(0);
 
   return (
-    <div className="card shadow-sm">
+    <div className="card shadow-sm" style={{ backgroundColor: "var(--brown-800)" }}>
       <div style={{ position: "relative", cursor: primary ? "zoom-in" : "default" }}>
         {primary ? (
           <img
@@ -24,10 +26,14 @@ export default function UserCard({ user, onLike, onSkip }) {
             onClick={() => { setStart(0); setOpen(true); }}
           />
         ) : (
-          <div className="bg-secondary text-white d-flex align-items-center justify-content-center" style={{ height: "260px" }}>
+          <div
+            className="d-flex align-items-center justify-content-center"
+            style={{ height: "260px", background: "var(--brown-900)", color: "var(--text-light)" }}
+          >
             No Photo
           </div>
         )}
+
         {photos.length > 1 && (
           <div className="position-absolute bottom-0 start-0 end-0 p-2 d-flex gap-1 justify-content-center">
             {photos.slice(0, 5).map((u, idx) => (
@@ -47,11 +53,26 @@ export default function UserCard({ user, onLike, onSkip }) {
       </div>
 
       <div className="card-body">
-        <h5 className="mb-1">{user.name} {user.age ? `• ${user.age}` : ""}</h5>
-        <p className="text-muted mb-3">{user.city || ""}</p>
+        {/* Name in Candle Love cursive/amber */}
+        <h5 className="mb-1 brand-cursive">
+          {user.name} {user.age ? `• ${user.age}` : ""}
+        </h5>
+
+        {/* Location in light text */}
+        <p className="mb-3" style={{ color: "var(--text-light)" }}>
+          {user.city || ""}
+        </p>
+
         <div className="d-flex gap-2">
-          <button className="btn btn-success btn-sm" onClick={() => onLike(user.uid)}>❤️ Like</button>
-          <button className="btn btn-outline-secondary btn-sm" onClick={() => onSkip(user.uid)}>Skip</button>
+          {user.matched ? (
+            <Link to={`/chat/${user.matchId}`} className="btn btn-primary btn-sm">
+              Open Chat
+            </Link>
+          ) : (
+            <button className="btn btn-success btn-sm" onClick={() => onLike(user.uid)}>
+              ❤️ Like
+            </button>
+          )}
         </div>
       </div>
 

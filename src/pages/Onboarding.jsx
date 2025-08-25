@@ -1,109 +1,100 @@
-import React, { useState } from "react";
-import { db, auth } from "../firebase";
-import { doc, setDoc } from "firebase/firestore";
-import { useAuth } from "../context/AuthContext";
+// src/pages/Onboarding.jsx
+import React, { useEffect, useState } from "react";
+import { auth, db } from "../firebase";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import PhotoUploader from "../components/PhotoUploader";
+import cleanPhotos from "../utils/cleanPhotos";
+import { needsPhotoEncouragement, recomputeVisibility } from "../services/users";
 
 export default function Onboarding() {
-  const { user } = useAuth();
-  const [form, setForm] = useState({
-    name: "",
-    age: "",
-    city: "",
-    interests: "",
-    lookingFor: "",
-  });
+  const [loading, setLoading] = useState(true);
+  const [userDoc, setUserDoc] = useState(null);
   const [saving, setSaving] = useState(false);
+  const uid = auth.currentUser?.uid;
 
-  const handle = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  useEffect(() => {
+    (async () => {
+      if (!uid) return;
+      const ref = doc(db, "users", uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        setUserDoc({ id: snap.id, ...snap.data() });
+      } else {
+        const base = {
+          displayName: auth.currentUser?.displayName || "",
+          bio: "",
+          photos: [],
+          createdAt: Date.now(),
+        };
+        await setDoc(ref, base);
+        setUserDoc({ id: uid, ...base });
+      }
+      setLoading(false);
+    })();
+  }, [uid]);
 
-  async function save() {
+  const photos = cleanPhotos(userDoc?.photos || []);
+  const hasMin = photos.length >= 1; // only 1 required
+  const showEncouragement = needsPhotoEncouragement(userDoc);
+
+  const handleSave = async () => {
+    if (!uid || saving) return;
+    setSaving(true);
     try {
-      if (!user) return alert("Please sign in first.");
-      setSaving(true);
-      await setDoc(doc(db, "users", auth.currentUser.uid), {
-        uid: auth.currentUser.uid,
-        ...form,
-        createdAt: Date.now(),
-      });
-      alert("Profile saved.");
-      setForm({ name: "", age: "", city: "", interests: "", lookingFor: "" });
+      await recomputeVisibility(uid);
+      alert(
+        hasMin
+          ? "Profile saved! You're visible to others now."
+          : "Add at least one photo to make your profile visible."
+      );
+    } catch (e) {
+      console.error(e);
+      alert("Could not save profile. Please try again.");
     } finally {
       setSaving(false);
     }
-  }
+  };
+
+  if (loading) return <div className="container py-5">Loading…</div>;
 
   return (
     <div className="container py-4">
-      <h2 className="mb-3">Onboarding (MVP)</h2>
-      <div className="card card-soft p-3 p-md-4">
-        <div className="row g-3">
-          <div className="col-12">
-            <label className="form-label">Name</label>
-            <input
-              className="form-control form-control-lg"
-              name="name"
-              autoComplete="name"
-              inputMode="text"
-              value={form.name}
-              onChange={handle}
-            />
-          </div>
+      <h2 className="mb-3">Finish setting up your profile</h2>
 
-          <div className="col-6 col-md-3">
-            <label className="form-label">Age</label>
-            <input
-              type="number"
-              className="form-control form-control-lg"
-              name="age"
-              inputMode="numeric"
-              value={form.age}
-              onChange={handle}
-            />
-          </div>
+      {!hasMin && (
+        <div className="alert alert-warning">
+          <strong>Add at least one photo</strong> to make your profile visible.
+          Tip: profiles with <strong>3+ photos</strong> get many more matches.
+        </div>
+      )}
 
-          <div className="col-6 col-md-3">
-            <label className="form-label">City</label>
-            <input
-              className="form-control form-control-lg"
-              name="city"
-              autoComplete="address-level2"
-              value={form.city}
-              onChange={handle}
-            />
-          </div>
+      {showEncouragement && (
+        <div className="alert alert-info">
+          Looking great! Add <strong>{3 - photos.length} more</strong>{" "}
+          photo{3 - photos.length === 1 ? "" : "s"} to boost visibility and trust.
+        </div>
+      )}
 
-          <div className="col-12">
-            <label className="form-label">Interests (comma separated)</label>
-            <input
-              className="form-control form-control-lg"
-              name="interests"
-              value={form.interests}
-              onChange={handle}
-            />
-          </div>
-
-          <div className="col-12">
-            <label className="form-label">Looking for</label>
-            <select
-              className="form-select form-select-lg"
-              name="lookingFor"
-              value={form.lookingFor}
-              onChange={handle}
-            >
-              <option value="">Select...</option>
-              <option value="Friendship">Friendship</option>
-              <option value="Dating">Dating</option>
-              <option value="Long-term">Long‑term</option>
-            </select>
-          </div>
-
-          <div className="col-12 d-grid">
-            <button className="btn btn-primary btn-lg" onClick={save} disabled={saving}>
-              {saving ? "Saving..." : "Save Profile"}
-            </button>
-          </div>
+      <div className="card shadow-sm mb-4">
+        <div className="card-body">
+          <h5 className="card-title">Photos</h5>
+          <p className="text-muted mb-3">
+            Minimum <strong>1 photo</strong>. We recommend <strong>3 or more</strong> for best results.
+          </p>
+          <PhotoUploader
+            value={photos}
+            onChange={async (newPhotos) => {
+              const ref = doc(db, "users", uid);
+              await updateDoc(ref, { photos: newPhotos });
+              setUserDoc((p) => ({ ...p, photos: newPhotos }));
+            }}
+          />
         </div>
       </div>
+
+      <button className="btn btn-primary" disabled={saving} onClick={handleSave}>
+        {saving ? "Saving…" : "Save & Continue"}
+      </button>
     </div>
   );
 }

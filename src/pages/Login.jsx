@@ -3,6 +3,7 @@ import React from "react";
 import { useLocation, Navigate, Link, useNavigate } from "react-router-dom";
 import { signInWithGoogle } from "../firebase";
 import { useAuth } from "../context/AuthContext";
+import BrandName from "../components/BrandName"; // ✅ import our brand component
 
 const friendly = (code) => {
   switch (code) {
@@ -41,7 +42,10 @@ export default function Login() {
   return (
     <div className="container py-5">
       <div className="mx-auto card card-soft p-4" style={{ maxWidth: 480 }}>
-        <h1 className="h4 mb-3 text-center">Welcome to CupidMVP</h1>
+        <h1 className="h4 mb-3 text-center">
+          Welcome to <BrandName /> {/* ✅ always cursive Candle Love */}
+        </h1>
+
         <div className="d-grid gap-2">
           <button className="btn btn-primary btn-lg" onClick={handleGoogle}>
             Continue with Google
@@ -50,6 +54,7 @@ export default function Login() {
             Sign in with Email
           </button>
         </div>
+
         <div className="text-center mt-3">
           <small className="text-muted">
             New here? <Link to="/signup">Create account</Link> ·{" "}
