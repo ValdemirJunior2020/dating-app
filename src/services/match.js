@@ -19,49 +19,54 @@ function requireUid() {
 }
 
 /**
- * Like a user AND immediately ensure a chat exists so the UI can show "Open Chat".
- * If the reverse like already exists, it's a real "match"; otherwise status is "pending".
- * Either way, we return a matchId and the UI can open chat.
+ * Like a user and upsert a /matches doc + ensure /chats doc.
+ * Writes to BOTH /likes/{likeId} AND /users/{uid}/likes/{targetUid}
+ * so older code paths continue to work.
  */
 export async function likeUser(targetUid) {
   const myUid = requireUid();
+  if (!targetUid) throw new Error("Missing targetUid");
   if (myUid === targetUid) return { status: "self" };
 
-  // Record my like (top-level "likes" collection for simplicity)
+  const now = serverTimestamp();
+
+  // 1) Write like at top-level
   const likeId = `${myUid}_${targetUid}`;
   await setDoc(doc(db, "likes", likeId), {
     id: likeId,
     fromUid: myUid,
     toUid: targetUid,
-    createdAt: serverTimestamp(),
-  });
+    createdAt: now,
+  }, { merge: true });
 
-  // Check if they liked me already
-  const reverseId = `${targetUid}_${myUid}`;
-  const reverseDoc = await getDoc(doc(db, "likes", reverseId));
-  const matched = reverseDoc.exists();
+  // 1b) Mirror like under /users/{uid}/likes/{targetUid}
+  await setDoc(doc(db, "users", myUid, "likes", targetUid), {
+    fromUid: myUid,
+    toUid: targetUid,
+    createdAt: now,
+  }, { merge: true });
 
-  // Create/merge a match doc so we always have a consistent id to chat on
+  // 2) Determine if reverse like already exists
+  const reverseSnap = await getDoc(doc(db, "likes", `${targetUid}_${myUid}`));
+  const matched = reverseSnap.exists();
+
+  // 3) Upsert match (stable id for chat)
   const matchId = [myUid, targetUid].sort().join("_");
-  await setDoc(
-    doc(db, "matches", matchId),
-    {
-      id: matchId,
-      users: [myUid, targetUid].sort(),
-      status: matched ? "matched" : "pending",
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+  await setDoc(doc(db, "matches", matchId), {
+    id: matchId,
+    users: [myUid, targetUid].sort(),
+    status: matched ? "matched" : "pending",
+    createdAt: now,
+    updatedAt: now,
+  }, { merge: true });
 
-  // Ensure a chat thread exists for this match id
+  // 4) Ensure a chat exists for this match
   await ensureChat(matchId);
 
   return { status: matched ? "matched" : "pending", matchId };
 }
 
-/** Return UIDs I already liked (helper used in browse filters if needed) */
+/** UIDs I already liked (helper) */
 export async function fetchAlreadyLikedUids() {
   const myUid = requireUid();
   const q = query(collection(db, "likes"), where("fromUid", "==", myUid));
@@ -71,7 +76,7 @@ export async function fetchAlreadyLikedUids() {
   return set;
 }
 
-/** Fetch all matches for the current user and include the other user's profile */
+/** Fetch matches I’m in, hydrated with the other user's profile */
 export async function fetchUserMatches() {
   const myUid = requireUid();
   const q = query(collection(db, "matches"), where("users", "array-contains", myUid));
@@ -81,12 +86,17 @@ export async function fetchUserMatches() {
   for (const d of snap.docs) {
     const data = d.data();
     const otherUid = data.users.find((u) => u !== myUid);
-    const otherSnap = await getDoc(doc(db, "users", otherUid));
-    const profile = otherSnap.exists() ? otherSnap.data() : {};
+
+    let profile = {};
+    try {
+      const other = await getDoc(doc(db, "users", otherUid));
+      if (other.exists()) profile = other.data();
+    } catch (_) {}
+
     out.push({
       id: data.id,          // matchId
       otherUid,
-      status: data.status,  // "matched" | "pending"
+      status: data.status,  // "pending" | "matched"
       ...profile,           // name, photos, city, etc.
     });
   }

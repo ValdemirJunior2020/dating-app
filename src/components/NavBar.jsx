@@ -1,187 +1,94 @@
 // src/components/NavBar.jsx
 import React from "react";
-import { Link, NavLink } from "react-router-dom";
+import "./NavBar.css"; // ✅ use your navbar theme
+import { NavLink, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { auth } from "../firebase";
-import { signOut } from "firebase/auth";
-import "./NavBar.css";
+
+const logoSrc = process.env.PUBLIC_URL + "/logo.png";
+const linkClass = ({ isActive }) => "nav-link" + (isActive ? " active" : "");
 
 export default function NavBar() {
   const { user } = useAuth();
-  const linkClass = ({ isActive }) => "nav-link" + (isActive ? " active" : "");
-  const logoSrc = `${process.env.PUBLIC_URL || ""}/logo.png`;
-
-  async function handleLogout() {
-    try {
-      await signOut(auth);
-    } catch (e) {
-      console.error(e);
-      alert("Could not log out. Please try again.");
-    }
-  }
 
   return (
-    <nav className="navbar navbar-expand-md shadow-sm sticky-top">
+    <nav className="navbar navbar-expand-lg navbar-dark sticky-top">
       <div className="container">
-        {/* Brand (logo + text) */}
+        {/* Brand */}
         <Link className="navbar-brand d-flex align-items-center" to="/">
-          <img
-            src={logoSrc}
-            alt="Candle Love logo"
-            onError={(e) => (e.currentTarget.style.display = "none")}
-            style={{ height: 40, marginRight: 10 }}
-          />
-          Candle Love
+          <img src={logoSrc} alt="Candle Love logo" height={40} className="me-2" />
+          <span className="brand-cursive">Candle Love</span>
         </Link>
 
-        {/* Toggler (mobile) */}
+        {/* Hamburger */}
         <button
           className="navbar-toggler"
           type="button"
-          data-bs-toggle="offcanvas"
-          data-bs-target="#mnav"
-          aria-controls="mnav"
+          data-bs-toggle="collapse"
+          data-bs-target="#mainNav"
+          aria-controls="mainNav"
+          aria-expanded="false"
           aria-label="Toggle navigation"
         >
           <span className="navbar-toggler-icon" />
         </button>
 
-        {/* Mobile offcanvas (hidden on md+ to avoid duplicate menus) */}
-        <div
-          className="offcanvas offcanvas-end d-md-none"
-          tabIndex="-1"
-          id="mnav"
-          aria-labelledby="mnavLabel"
-        >
-          <div className="offcanvas-header">
-            <h5 className="offcanvas-title" id="mnavLabel">Menu</h5>
-            <button
-              type="button"
-              className="btn-close text-reset"
-              data-bs-dismiss="offcanvas"
-              aria-label="Close"
-            />
-          </div>
-          <div className="offcanvas-body">
-            <ul className="navbar-nav ms-auto gap-2">
-              <li className="nav-item">
-                <NavLink className={linkClass} to="/" data-bs-dismiss="offcanvas">
-                  Home
-                </NavLink>
-              </li>
-
-              {user ? (
-                <>
-                  <li className="nav-item">
-                    <NavLink className={linkClass} to="/browse" data-bs-dismiss="offcanvas">
-                      Browse
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className={linkClass} to="/matches" data-bs-dismiss="offcanvas">
-                      Matches
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className={linkClass} to="/online" data-bs-dismiss="offcanvas">
-                      Online
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className={linkClass} to="/chat" data-bs-dismiss="offcanvas">
-                      Chat
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className={linkClass} to="/settings" data-bs-dismiss="offcanvas">
-                      Settings
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <button
-                      className="btn btn-sm btn-outline-light"
-                      onClick={handleLogout}
-                      data-bs-dismiss="offcanvas"
-                    >
-                      Log out
-                    </button>
-                  </li>
-                </>
-              ) : (
-                <>
-                  <li className="nav-item">
-                    <NavLink className={linkClass} to="/login" data-bs-dismiss="offcanvas">
-                      Login
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className={linkClass} to="/signup" data-bs-dismiss="offcanvas">
-                      Sign Up
-                    </NavLink>
-                  </li>
-                </>
-              )}
-            </ul>
-          </div>
-        </div>
-
-        {/* Desktop menu (md+) */}
-        <div className="d-none d-md-flex ms-auto">
-          <ul className="navbar-nav gap-2">
+        {/* Collapsible area */}
+        <div className="collapse navbar-collapse" id="mainNav">
+          <ul className="navbar-nav me-auto mb-2 mb-lg-0">
             <li className="nav-item">
-              <NavLink className={linkClass} to="/">
+              <NavLink to="/" className={linkClass}>
                 Home
               </NavLink>
             </li>
 
-            {user ? (
+            {user && (
               <>
                 <li className="nav-item">
-                  <NavLink className={linkClass} to="/browse">
+                  <NavLink to="/browse" className={linkClass}>
                     Browse
                   </NavLink>
                 </li>
                 <li className="nav-item">
-                  <NavLink className={linkClass} to="/matches">
+                  <NavLink to="/matches" className={linkClass}>
                     Matches
                   </NavLink>
                 </li>
                 <li className="nav-item">
-                  <NavLink className={linkClass} to="/online">
+                  <NavLink to="/online" className={linkClass}>
                     Online
                   </NavLink>
                 </li>
                 <li className="nav-item">
-                  <NavLink className={linkClass} to="/chat">
+                  <NavLink to="/chat" className={linkClass}>
                     Chat
                   </NavLink>
                 </li>
                 <li className="nav-item">
-                  <NavLink className={linkClass} to="/settings">
+                  <NavLink to="/settings" className={linkClass}>
                     Settings
-                  </NavLink>
-                </li>
-                <li className="nav-item">
-                  <button className="btn btn-sm btn-outline-light" onClick={handleLogout}>
-                    Log out
-                  </button>
-                </li>
-              </>
-            ) : (
-              <>
-                <li className="nav-item">
-                  <NavLink className={linkClass} to="/login">
-                    Login
-                  </NavLink>
-                </li>
-                <li className="nav-item">
-                  <NavLink className={linkClass} to="/signup">
-                    Sign Up
                   </NavLink>
                 </li>
               </>
             )}
           </ul>
+
+          <div className="d-flex gap-2">
+            {!user ? (
+              <>
+                <Link to="/login" className="btn btn-outline-light">
+                  Login
+                </Link>
+                <Link to="/signup" className="btn btn-primary">
+                  Sign Up
+                </Link>
+              </>
+            ) : (
+              <button className="btn btn-outline-danger" onClick={() => auth.signOut()}>
+                Logout
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </nav>

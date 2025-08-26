@@ -24,7 +24,7 @@
   text-shadow: none !important;
 }
 
-/* Links inside login card */
+/* Links inside login/signup card */
 .auth-card a {
   color: #d68a1a !important; /* caramel accent */
   font-weight: 600;
@@ -38,6 +38,6 @@
 .brand-cursive {
   font-family: 'Great Vibes', cursive;
   font-weight: 700;
-  color: var(--amber) !important;      /* on-brand and visible */
+  color: var(--amber) !important;
   text-shadow: 0 0 4px rgba(216,122,18,0.45);
 }

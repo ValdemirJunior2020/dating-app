@@ -1,3 +1,4 @@
+// src/App.js
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
@@ -8,7 +9,7 @@ import Home from "./pages/Home";
 import Browse from "./pages/Browse";
 import Matches from "./pages/Matches";
 import Online from "./pages/Online";
-import Chat from "./pages/Chat";              // <— uses :matchId OR plain /chat
+import Chat from "./pages/Chat";              // <— supports :matchId or :otherUid
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
@@ -52,6 +53,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         {/* Chat list / placeholder */}
         <Route
           path="/chat"
@@ -61,6 +63,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         {/* Chat thread by matchId (same component) */}
         <Route
           path="/chat/:matchId"
@@ -70,6 +73,17 @@ export default function App() {
             </RequireAuth>
           }
         />
+
+        {/* ✅ Added: Chat thread by other user's uid (builds matchId in component) */}
+        <Route
+          path="/chat/with/:otherUid"
+          element={
+            <RequireAuth>
+              <Chat />
+            </RequireAuth>
+          }
+        />
+
         <Route
           path="/settings"
           element={

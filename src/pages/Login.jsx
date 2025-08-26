@@ -22,9 +22,15 @@ export default function Login() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const from = location.state?.from?.pathname || "/onboarding";
 
-  if (user) return <Navigate to={from} replace />;
+  // allow viewing this page while signed in if ?force=1
+  const params = new URLSearchParams(location.search);
+  const force = params.get("force") === "1";
+
+  // safer fallback: if you really want /onboarding keep it; otherwise /browse avoids blanks
+  const from = location.state?.from?.pathname || "/browse";
+
+  if (user && !force) return <Navigate to={from} replace />;
 
   async function handleGoogle() {
     try {
@@ -40,14 +46,10 @@ export default function Login() {
   }
 
   return (
-    // Uses .auth-page and .auth-card which are overridden in global.css
+    // Uses .auth-page and .auth-card classes in global.css
     <main className="auth-page">
-      {/* bg-transparent prevents global .container dark panel on auth pages */}
       <div className="container bg-transparent">
-        <div
-          className="card shadow-sm p-4 auth-card mx-auto"
-          style={{ maxWidth: 520 }}
-        >
+        <div className="card shadow-sm p-4 auth-card mx-auto" style={{ maxWidth: 520 }}>
           <h1 className="mb-3 text-center fw-semibold" style={{ letterSpacing: ".2px" }}>
             Welcome to <BrandName />
           </h1>

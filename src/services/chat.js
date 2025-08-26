@@ -1,81 +1,115 @@
 // src/services/chat.js
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
 import {
   doc,
-  setDoc,
   getDoc,
+  setDoc,
+  updateDoc,
   collection,
   addDoc,
   serverTimestamp,
   onSnapshot,
   query,
   orderBy,
-  limit,
 } from "firebase/firestore";
 
-/** Ensure a chat doc exists for a matchId (sorted pair "uidA_uidB") */
+/**
+ * Ensure a chat doc exists for the given matchId.
+ * - Reads matches/{matchId} to verify the current user is a participant
+ * - Upserts chats/{matchId} with metadata
+ */
 export async function ensureChat(matchId) {
+  if (!matchId) throw new Error("Missing matchId");
+  const me = auth.currentUser?.uid;
+  if (!me) throw new Error("Not signed in");
+
+  const matchRef = doc(db, "matches", matchId);
+  const matchSnap = await getDoc(matchRef);
+  if (!matchSnap.exists()) {
+    throw new Error("Match not found for matchId=" + matchId);
+  }
+  const match = matchSnap.data();
+  const users = match.users || [];
+
+  if (!users.includes(me)) {
+    throw new Error("You are not a participant in this match.");
+  }
+
   const chatRef = doc(db, "chats", matchId);
-
-  let snap = null;
-  try {
-    snap = await getDoc(chatRef);
-  } catch {
-    // ignore; we'll create the doc below
-  }
-
-  if (!snap || !snap.exists()) {
-    await setDoc(chatRef, {
-      id: matchId,
-      createdAt: serverTimestamp(),
-      lastMessageAt: null,
-      lastText: null,
-      lastFromUid: null,
-    });
-  }
-  return chatRef;
-}
-
-/** Send a message into chats/{matchId}/messages and update chat summary */
-export async function sendMessage(matchId, fromUid, text) {
-  const chatRef = await ensureChat(matchId);
-  const messagesRef = collection(chatRef, "messages");
-
-  await addDoc(messagesRef, {
-    fromUid,
-    text,
-    createdAt: serverTimestamp(),
-  });
-
+  // Create/merge the chat metadata
   await setDoc(
     chatRef,
     {
-      lastMessageAt: serverTimestamp(),
-      lastText: text,
-      lastFromUid: fromUid,
+      id: matchId,
+      users,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastMessage: null,
     },
     { merge: true }
   );
+
+  return chatRef;
 }
 
-/** Subscribe to full message stream (ascending by time) */
-export function subscribeMessages(matchId, cb) {
-  const messagesRef = collection(db, "chats", matchId, "messages");
-  const q = query(messagesRef, orderBy("createdAt", "asc"));
-  return onSnapshot(q, (snap) => {
-    const rows = [];
-    snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
-    cb(rows);
+/**
+ * Send a message to chats/{matchId}/messages with fields allowed by rules.
+ * Firestore rules typically require senderUid == request.auth.uid.
+ */
+export async function sendMessage(matchId, text) {
+  const me = auth.currentUser?.uid;
+  if (!me) throw new Error("Not signed in");
+  if (!matchId) throw new Error("Missing matchId");
+  const trimmed = (text || "").trim();
+  if (!trimmed) return;
+
+  // Make sure chat exists & we are allowed
+  await ensureChat(matchId);
+
+  const msgsCol = collection(db, "chats", matchId, "messages");
+  const now = serverTimestamp();
+
+  const docRef = await addDoc(msgsCol, {
+    text: trimmed,
+    senderUid: me,          // REQUIRED by rules
+    createdAt: now,
   });
+
+  // Update chat metadata
+  await updateDoc(doc(db, "chats", matchId), {
+    updatedAt: now,
+    lastMessage: {
+      text: trimmed,
+      senderUid: me,
+      at: now,
+    },
+  });
+
+  return docRef.id;
 }
 
-/** Subscribe to the latest single message for preview */
-export function subscribeLastMessage(matchId, cb) {
-  const messagesRef = collection(db, "chats", matchId, "messages");
-  const q = query(messagesRef, orderBy("createdAt", "desc"), limit(1));
-  return onSnapshot(q, (snap) => {
-    if (snap.empty) return cb(null);
-    const d = snap.docs[0];
-    cb({ id: d.id, ...d.data() });
-  });
+/**
+ * Subscribe to messages ordered by createdAt asc.
+ * onData receives an array of { id, ...data }
+ * Returns the unsubscribe function.
+ */
+export function subscribeMessages(matchId, onData, onError) {
+  if (!matchId) throw new Error("Missing matchId");
+  const qy = query(
+    collection(db, "chats", matchId, "messages"),
+    orderBy("createdAt", "asc")
+  );
+
+  return onSnapshot(
+    qy,
+    (snap) => {
+      const out = [];
+      snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+      onData?.(out);
+    },
+    (err) => {
+      console.error("subscribeMessages error:", err);
+      onError?.(err);
+    }
+  );
 }
