@@ -1,93 +1,139 @@
-// src/components/NavBar.jsx
 import React from "react";
-import "./NavBar.css"; // ✅ use your navbar theme
-import { NavLink, Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { auth } from "../firebase";
+import { logOut } from "../firebase";
+import "./NavBar.css";
 
-const logoSrc = process.env.PUBLIC_URL + "/logo.png";
-const linkClass = ({ isActive }) => "nav-link" + (isActive ? " active" : "");
+function firstNameFrom(user) {
+  const dn = user?.displayName || user?.name || "";
+  if (dn.trim()) return dn.split(" ")[0];
+  const em = user?.email || "";
+  return em ? em.split("@")[0] : "You";
+}
+
+function initialFrom(user) {
+  const s = (user?.displayName || user?.name || user?.email || "U").trim();
+  return s ? s[0].toUpperCase() : "U";
+}
 
 export default function NavBar() {
   const { user } = useAuth();
+  const first = firstNameFrom(user);
+  const initial = initialFrom(user);
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark sticky-top">
+    <nav className="navbar navbar-expand-md sticky-top">
       <div className="container">
-        {/* Brand */}
-        <Link className="navbar-brand d-flex align-items-center" to="/">
-          <img src={logoSrc} alt="Candle Love logo" height={40} className="me-2" />
+        {/* Brand: logo + name */}
+        <Link className="navbar-brand fw-bold" to="/">
+          <img src="/logo.png" alt="Candle Love logo" height="40" className="me-2" />
           <span className="brand-cursive">Candle Love</span>
         </Link>
 
-        {/* Hamburger */}
+        {/* Hamburger (mobile) */}
         <button
-          className="navbar-toggler"
+          className="navbar-toggler d-inline-flex d-md-none"
           type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#mainNav"
-          aria-controls="mainNav"
-          aria-expanded="false"
+          data-bs-toggle="offcanvas"
+          data-bs-target="#mnav"
+          aria-controls="mnav"
           aria-label="Toggle navigation"
         >
           <span className="navbar-toggler-icon" />
         </button>
 
-        {/* Collapsible area */}
-        <div className="collapse navbar-collapse" id="mainNav">
-          <ul className="navbar-nav me-auto mb-2 mb-lg-0">
+        {/* Desktop menu */}
+        <div className="d-none d-md-flex ms-auto align-items-center gap-3">
+          {user && (
+            <div className="user-chip" title="You're logged in">
+              <div className="avatar">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="" />
+                ) : (
+                  <span className="initial">{initial}</span>
+                )}
+                <span className="online" />
+              </div>
+              <div className="user-text">
+                <span className="hello">Hi,</span>{" "}
+                <span className="name">{first}</span>
+              </div>
+            </div>
+          )}
+
+          <ul className="navbar-nav align-items-center gap-2">
             <li className="nav-item">
-              <NavLink to="/" className={linkClass}>
-                Home
-              </NavLink>
+              <NavLink className="nav-link" to="/">Home</NavLink>
             </li>
 
-            {user && (
+            {user ? (
               <>
+                <li className="nav-item"><NavLink className="nav-link" to="/browse">Browse</NavLink></li>
+                <li className="nav-item"><NavLink className="nav-link" to="/matches">Matches</NavLink></li>
+                <li className="nav-item"><NavLink className="nav-link" to="/chat">Chat</NavLink></li>
+                <li className="nav-item"><NavLink className="nav-link" to="/settings">Settings</NavLink></li>
                 <li className="nav-item">
-                  <NavLink to="/browse" className={linkClass}>
-                    Browse
-                  </NavLink>
+                  <button className="btn btn-sm btn-outline-light" onClick={logOut}>Log out</button>
                 </li>
-                <li className="nav-item">
-                  <NavLink to="/matches" className={linkClass}>
-                    Matches
-                  </NavLink>
-                </li>
-                <li className="nav-item">
-                  <NavLink to="/online" className={linkClass}>
-                    Online
-                  </NavLink>
-                </li>
-                <li className="nav-item">
-                  <NavLink to="/chat" className={linkClass}>
-                    Chat
-                  </NavLink>
-                </li>
-                <li className="nav-item">
-                  <NavLink to="/settings" className={linkClass}>
-                    Settings
-                  </NavLink>
-                </li>
+              </>
+            ) : (
+              <>
+                <li className="nav-item"><NavLink className="nav-link" to="/login">Login</NavLink></li>
+                <li className="nav-item"><NavLink className="nav-link" to="/signup">Sign Up</NavLink></li>
               </>
             )}
           </ul>
+        </div>
 
-          <div className="d-flex gap-2">
-            {!user ? (
-              <>
-                <Link to="/login" className="btn btn-outline-light">
-                  Login
-                </Link>
-                <Link to="/signup" className="btn btn-primary">
-                  Sign Up
-                </Link>
-              </>
-            ) : (
-              <button className="btn btn-outline-danger" onClick={() => auth.signOut()}>
-                Logout
-              </button>
+        {/* Mobile offcanvas */}
+        <div className="offcanvas offcanvas-end d-md-none" tabIndex="-1" id="mnav" aria-labelledby="mnavLabel">
+          <div className="offcanvas-header">
+            <h5 className="offcanvas-title brand-cursive" id="mnavLabel">Candle Love</h5>
+            <button type="button" className="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+          </div>
+
+          <div className="offcanvas-body">
+            {user && (
+              <div className="mb-3">
+                <div className="user-chip w-100 justify-content-start">
+                  <div className="avatar">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt="" />
+                    ) : (
+                      <span className="initial">{initial}</span>
+                    )}
+                    <span className="online" />
+                  </div>
+                  <div className="user-text">
+                    <span className="hello">Hi,</span>{" "}
+                    <span className="name">{first}</span>
+                  </div>
+                </div>
+              </div>
             )}
+
+            <ul className="navbar-nav ms-auto gap-2">
+              <li className="nav-item">
+                <NavLink className="nav-link" to="/" data-bs-dismiss="offcanvas">Home</NavLink>
+              </li>
+
+              {user ? (
+                <>
+                  <li className="nav-item"><NavLink className="nav-link" to="/browse" data-bs-dismiss="offcanvas">Browse</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/matches" data-bs-dismiss="offcanvas">Matches</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/chat" data-bs-dismiss="offcanvas">Chat</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/settings" data-bs-dismiss="offcanvas">Settings</NavLink></li>
+                  <li className="nav-item">
+                    <button className="btn btn-sm btn-outline-light" onClick={logOut} data-bs-dismiss="offcanvas">Log out</button>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li className="nav-item"><NavLink className="nav-link" to="/login" data-bs-dismiss="offcanvas">Login</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/signup" data-bs-dismiss="offcanvas">Sign Up</NavLink></li>
+                </>
+              )}
+            </ul>
           </div>
         </div>
       </div>

@@ -21,14 +21,13 @@
 .navbar-brand {
   display: flex;
   align-items: center;
-  font-family: 'Great Vibes', cursive; /* Cursive style */
+  font-family: 'Great Vibes', cursive;
   font-weight: 700;
   font-size: 1.8rem;
   color: var(--amber) !important;
   text-shadow: 0 0 6px rgba(216, 122, 18, 0.5);
   letter-spacing: 0.5px;
 }
-
 .navbar-brand img {
   height: 40px;
   margin-right: 10px;
@@ -63,17 +62,6 @@
 }
 
 /* Buttons */
-.btn-outline-danger {
-  border-color: var(--amber-deep);
-  color: var(--amber-deep);
-  background: transparent;
-  transition: all 0.2s;
-}
-.btn-outline-danger:hover {
-  background: var(--amber-deep);
-  color: var(--brown-900);
-}
-
 .btn-outline-light {
   border-color: var(--honey);
   color: var(--honey);
@@ -83,12 +71,61 @@
   color: var(--brown-900);
 }
 
-/* Hamburger (toggler) */
+/* Force hamburger (toggler) lines to WHITE */
 .navbar-toggler {
   border-color: var(--honey);
 }
-
-/* Force hamburger lines to WHITE */
 .navbar-toggler-icon {
   background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3e%3cpath stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+}
+
+/* Logged-in user chip */
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(230, 183, 109, 0.25);
+  color: var(--text-light);
+}
+.user-chip .avatar {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--brown-900);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: var(--honey);
+}
+.user-chip .avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.user-chip .avatar .initial {
+  font-size: 0.9rem;
+}
+.user-chip .avatar .online {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  background: #22c55e; /* green */
+  border: 2px solid var(--brown-900);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
+}
+.user-chip .user-text .hello {
+  color: var(--honey);
+  font-size: 0.9rem;
+}
+.user-chip .user-text .name {
+  color: var(--text-light);
+  font-weight: 700;
 }
