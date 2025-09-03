@@ -1,7 +1,9 @@
 {
   "name": "functions",
   "private": true,
-  "engines": { "node": "18" },
+  "engines": {
+    "node": "18"
+  },
   "scripts": {
     "lint": "echo Skipping lint",
     "serve": "firebase emulators:start --only functions",
@@ -10,7 +12,8 @@
   },
   "dependencies": {
     "@sendgrid/mail": "^7.7.0",
-    "firebase-admin": "^12.6.0",
-    "firebase-functions": "^4.7.0"
+    "dotenv": "^17.2.2",
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^5.1.1"
   }
 }

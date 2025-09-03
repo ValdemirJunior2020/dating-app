@@ -16,6 +16,8 @@ import SignUp from "./pages/SignUp";
 import EmailLogin from "./pages/EmailLogin";  // comment out if you don't have it
 import ResetPassword from "./pages/ResetPassword"; // comment out if you don't have it
 
+import EduSignUp from "./pages/EduSignUp";    // ✅ NEW
+
 export default function App() {
   return (
     <>
@@ -27,6 +29,9 @@ export default function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login-email" element={<EmailLogin />} />
         <Route path="/reset" element={<ResetPassword />} />
+
+        {/* ✅ NEW: Public route for .edu verification */}
+        <Route path="/edu-signup" element={<EduSignUp />} />  {/* ✅ NEW */}
 
         {/* Private */}
         <Route
