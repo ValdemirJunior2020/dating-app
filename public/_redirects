@@ -1,2 +1,3 @@
 /sendEduOtp   https://us-central1-review-45013.cloudfunctions.net/sendEduOtp   200
 /verifyEduOtp https://us-central1-review-45013.cloudfunctions.net/verifyEduOtp 200
+/*            /index.html                                                        200
