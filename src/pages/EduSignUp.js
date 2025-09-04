@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 
-const API_BASE = process.env.REACT_APP_FUNCTIONS_BASE || "";
+/**
+ * Calls your Functions either through Netlify redirects (API_BASE = "")
+ * or directly via REACT_APP_FUNCTIONS_BASE.
+ */
+const API_BASE = process.env.REACT_APP_FUNCTIONS_BASE || ""; // keep "" if you're using Netlify _redirects
 
 const isEdu = (email = "") => /\.edu$/i.test(email);
 
@@ -32,12 +36,16 @@ export default function EduSignUp() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to send code");
-      if (data.alreadyVerified) {
+
+      // Success path (even if SendGrid couldn't send yet)
+      setStep(2);
+      if (data.emailSent === false) {
+        setMsg("Code created (email not sent yet). Ask admin to verify or check later.");
+      } else if (data.alreadyVerified) {
         setVerified(true);
         setStep(3);
         setMsg("Email is already verified. You can continue.");
       } else {
-        setStep(2);
         setMsg("Code sent! Check your inbox (valid for 10 minutes).");
       }
     } catch (err) {
@@ -55,7 +63,7 @@ export default function EduSignUp() {
       return;
     }
     if (!/^\d{6}$/.test(code)) {
-      setMsg("Enter the 6-digit code we emailed you.");
+      setMsg("Enter the 6-digit code we emailed you (or admin provided).");
       return;
     }
     try {
@@ -86,6 +94,7 @@ export default function EduSignUp() {
         We verify <b>.edu</b> emails to keep the community real, safe, and mature.
       </p>
 
+      {/* Step 1 — Send Code */}
       <form onSubmit={sendCode} className="mb-4">
         <label className="form-label">College email (.edu)</label>
         <input
@@ -101,6 +110,7 @@ export default function EduSignUp() {
         </button>
       </form>
 
+      {/* Step 2 — Verify Code */}
       <form onSubmit={verifyCode} className="mb-2">
         <label className="form-label">6-digit code</label>
         <input
@@ -127,7 +137,7 @@ export default function EduSignUp() {
 
       <hr className="my-4" />
       <p className="small text-muted">
-        Didn’t get the email? Check spam or promotions. Codes expire after 10 minutes.
+        Didn’t get the email? Your code still exists for 10 minutes. An admin can help you verify.
       </p>
     </div>
   );

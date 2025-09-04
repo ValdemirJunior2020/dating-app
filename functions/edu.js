@@ -1,49 +1,47 @@
 /**
- * edu.js — .edu email OTP verification via SendGrid
+ * edu.js — .edu OTP verification with SendGrid (safe while SendGrid is provisioning)
+ *
  * Endpoints:
  *  - POST /sendEduOtp   { email }
  *  - POST /verifyEduOtp { email, code }
  *
- * Accepts ONLY .edu domains. Sends a 6-digit OTP via SendGrid.
+ * Notes:
+ *  - Accepts ONLY .edu emails.
+ *  - Creates the OTP first, then TRIES to email it. If SendGrid fails (provisioning/401/etc),
+ *    we still return ok:true with { emailSent:false } so you can QA by reading Firestore.
  */
 
 const functions = require("firebase-functions");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const sgMail = require("@sendgrid/mail");
 
-// Initialize Admin once
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+// Init Admin
+if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-// ---------- Config ----------
-const OTP_TTL_MINUTES = 10;     // code expires after 10 minutes
-const MAX_ATTEMPTS = 5;         // wrong tries allowed
-const EDU_REGEX = /\.edu$/i;    // only .edu domains
+// ===== Secrets =====
+const SENDGRID_SECRET = defineSecret("SENDGRID_API_KEY"); // set via: firebase functions:secrets:set SENDGRID_API_KEY
+
+// ===== Config =====
+const OTP_TTL_MINUTES = 10;
+const MAX_ATTEMPTS = 5;
+const EDU_REGEX = /\.edu$/i;
 
 const BRAND = process.env.APP_BRAND || "Candle Love";
-const FROM_EMAIL = process.env.SENDGRID_FROM || "infojr.83@gmail.com";
+const FROM_EMAIL = process.env.SENDGRID_FROM || "infojr.83@gmail.com"; // verify this in SendGrid (Single Sender or Domain Auth)
 
-// SENDGRID_API_KEY must be set as Firebase Secret or env var
-let SENDGRID_KEY = process.env.SENDGRID_API_KEY;
-try {
-  if (functions && functions.config && functions.config().sendgrid_key) {
-    SENDGRID_KEY = functions.config().sendgrid_key.key;
-  }
-} catch (_) {}
-
-// ---------- Helpers ----------
+// ===== Helpers =====
 const nowMs = () => Date.now();
 const addMinutes = (ms, minutes) => ms + minutes * 60 * 1000;
-const genCode = () => String(Math.floor(100000 + Math.random() * 900000)); // 6-digit code
+const genCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
 async function saveOtp(email, code) {
   const key = email.toLowerCase();
   const expiresAt = addMinutes(nowMs(), OTP_TTL_MINUTES);
   await db.collection("eduOtps").doc(key).set({
     email: key,
-    codePlain: code, // MVP: plain text (can bcrypt.hash later)
+    codePlain: code, // simple MVP; hash later if desired
     attempts: 0,
     expiresAt,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -70,7 +68,7 @@ async function markVerified(email) {
   await db.collection("verifiedEduEmails").doc(email.toLowerCase()).set({
     email: email.toLowerCase(),
     verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-    type: "edu"
+    type: "edu",
   });
 }
 
@@ -85,12 +83,11 @@ function addCors(res) {
   res.set("Access-Control-Allow-Headers", "Content-Type");
 }
 
-// ---------- Email ----------
+// ===== Email =====
 async function sendOtpEmail(to, code) {
-  if (!SENDGRID_KEY) {
-    throw new Error("Missing SENDGRID_API_KEY. Run: firebase functions:secrets:set SENDGRID_API_KEY");
-  }
-  sgMail.setApiKey(SENDGRID_KEY);
+  const key = SENDGRID_SECRET.value(); // read secret at runtime
+  if (!key) throw new Error("Missing SENDGRID_API_KEY secret");
+  sgMail.setApiKey(key);
 
   const subject = `Your ${BRAND} verification code`;
   const html = `
@@ -106,75 +103,93 @@ async function sendOtpEmail(to, code) {
   await sgMail.send({ to, from: FROM_EMAIL, subject, html });
 }
 
-// ---------- HTTP Functions ----------
+// ===== HTTP Functions =====
 
 // POST /sendEduOtp   body: { email }
-const sendEduOtp = functions.https.onRequest(async (req, res) => {
-  addCors(res);
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
+const sendEduOtp = functions
+  .runWith({ secrets: [SENDGRID_SECRET] })
+  .https.onRequest(async (req, res) => {
+    addCors(res);
+    if (req.method === "OPTIONS") return res.status(204).end();
+    if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
 
-  try {
-    const { email } = req.body || {};
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      return res.status(400).json({ ok: false, error: "Valid email required" });
-    }
-    if (!EDU_REGEX.test(email)) {
-      return res.status(400).json({ ok: false, error: "Only .edu emails are allowed" });
-    }
-    if (await alreadyVerified(email)) {
-      return res.status(200).json({ ok: true, alreadyVerified: true });
-    }
+    try {
+      const { email } = req.body || {};
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        return res.status(400).json({ ok: false, error: "Valid email required" });
+      }
+      if (!EDU_REGEX.test(email)) {
+        return res.status(400).json({ ok: false, error: "Only .edu emails are allowed" });
+      }
+      if (await alreadyVerified(email)) {
+        return res.status(200).json({ ok: true, alreadyVerified: true });
+      }
 
-    const code = genCode();
-    await saveOtp(email, code);
-    await sendOtpEmail(email, code);
-    return res.status(200).json({ ok: true, message: "OTP sent" });
-  } catch (err) {
-    console.error("sendEduOtp:", err);
-    return res.status(500).json({ ok: false, error: String(err.message || err) });
-  }
-});
+      // 1) Always create OTP so QA can proceed even if email sending fails
+      const code = genCode();
+      await saveOtp(email, code);
+
+      // 2) Try to send email, but don't fail the whole request if SendGrid isn't ready
+      let emailSent = true;
+      try {
+        await sendOtpEmail(email, code);
+      } catch (e) {
+        emailSent = false;
+        console.error("SendGrid error during sendOtpEmail:", e?.response?.body || e?.message || e);
+      }
+
+      return res.status(200).json({
+        ok: true,
+        message: emailSent ? "OTP sent" : "OTP created (email not sent; provisioning). Ask admin to verify code.",
+        emailSent
+      });
+    } catch (err) {
+      console.error("sendEduOtp:", err);
+      return res.status(500).json({ ok: false, error: String(err.message || err) });
+    }
+  });
 
 // POST /verifyEduOtp  body: { email, code }
-const verifyEduOtp = functions.https.onRequest(async (req, res) => {
-  addCors(res);
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
+const verifyEduOtp = functions
+  .runWith({ secrets: [SENDGRID_SECRET] })
+  .https.onRequest(async (req, res) => {
+    addCors(res);
+    if (req.method === "OPTIONS") return res.status(204).end();
+    if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
 
-  try {
-    const { email, code } = req.body || {};
-    if (!email || !/^\d{6}$/.test(code || "")) {
-      return res.status(400).json({ ok: false, error: "Email and 6-digit code required" });
-    }
+    try {
+      const { email, code } = req.body || {};
+      if (!email || !/^\d{6}$/.test(code || "")) {
+        return res.status(400).json({ ok: false, error: "Email and 6-digit code required" });
+      }
 
-    const record = await getOtp(email);
-    if (!record) {
-      return res.status(400).json({ ok: false, error: "No OTP found. Request a new code." });
-    }
+      const record = await getOtp(email);
+      if (!record) {
+        return res.status(400).json({ ok: false, error: "No OTP found. Request a new code." });
+      }
 
-    if ((record.attempts || 0) >= MAX_ATTEMPTS) {
+      if ((record.attempts || 0) >= MAX_ATTEMPTS) {
+        await clearOtp(email);
+        return res.status(429).json({ ok: false, error: "Too many attempts. Request a new code." });
+      }
+
+      if (nowMs() > Number(record.expiresAt)) {
+        await clearOtp(email);
+        return res.status(400).json({ ok: false, error: "Code expired. Request a new one." });
+      }
+
+      if (code !== record.codePlain) {
+        await bumpAttempts(email);
+        return res.status(400).json({ ok: false, error: "Invalid code." });
+      }
+
+      await markVerified(email);
       await clearOtp(email);
-      return res.status(429).json({ ok: false, error: "Too many attempts. Request a new code." });
+      return res.status(200).json({ ok: true, verified: true });
+    } catch (err) {
+      console.error("verifyEduOtp:", err);
+      return res.status(500).json({ ok: false, error: String(err.message || err) });
     }
-
-    if (nowMs() > Number(record.expiresAt)) {
-      await clearOtp(email);
-      return res.status(400).json({ ok: false, error: "Code expired. Request a new one." });
-    }
-
-    if (code !== record.codePlain) {
-      await bumpAttempts(email);
-      return res.status(400).json({ ok: false, error: "Invalid code." });
-    }
-
-    await markVerified(email);
-    await clearOtp(email);
-    return res.status(200).json({ ok: true, verified: true });
-  } catch (err) {
-    console.error("verifyEduOtp:", err);
-    return res.status(500).json({ ok: false, error: String(err.message || err) });
-  }
-});
+  });
 
 module.exports = { sendEduOtp, verifyEduOtp };
