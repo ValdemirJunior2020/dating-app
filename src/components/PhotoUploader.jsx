@@ -1,171 +1,182 @@
 // src/components/PhotoUploader.jsx
 import React, { useRef, useState } from "react";
-import { auth } from "../firebase";
-import {
-  getStorage,
-  ref as storageRef,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
+import { getAuth } from "firebase/auth";
+import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
+import Lightbox from "./Lightbox";
+import { detectFaceInFile } from "../utils/faceCheck";
 
 /**
  * Props:
- *  - value: string[] (download URLs)
- *  - onChange: (urls: string[]) => void
+ *  - value: string[]            // photo URLs
+ *  - onChange: (string[]) => void
+ *  - max?: number               // default 6
  */
-export default function PhotoUploader({ value = [], onChange }) {
-  const uid = auth.currentUser?.uid;
-  const inputRef = useRef(null);
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
-
-  if (!uid) {
-    return <div className="text-light">Sign in to upload photos.</div>;
-  }
-
+export default function PhotoUploader({ value = [], onChange, max = 6 }) {
+  const auth = getAuth();
+  const uid = auth.currentUser?.uid || "anon";
   const storage = getStorage();
 
-  function pick() {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerStart, setViewerStart] = useState(0);
+  const inputRef = useRef(null);
+
+  const photos = Array.isArray(value) ? value.filter(Boolean) : [];
+
+  function openPicker() {
     inputRef.current?.click();
   }
 
-  async function handleFiles(e) {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-
-    setBusy(true);
-    setProgress(0);
-
-    try {
-      const uploadedUrls = [];
-      for (const file of files) {
-        // Optional validation
-        if (!file.type.startsWith("image/")) {
-          alert(`File ${file.name} is not an image.`);
-          continue;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          alert(`File ${file.name} is larger than 10MB.`);
-          continue;
-        }
-
-        const path = `photos/${uid}/${Date.now()}-${file.name}`;
-        const ref = storageRef(storage, path);
-        const task = uploadBytesResumable(ref, file);
-
-        const url = await new Promise((resolve, reject) => {
-          task.on(
-            "state_changed",
-            (snap) => {
-              const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-              setProgress(pct);
-            },
-            reject,
-            async () => {
-              try {
-                const downloadURL = await getDownloadURL(ref);
-                resolve(downloadURL); // includes alt=media&token=...
-              } catch (err) {
-                reject(err);
-              }
-            }
-          );
-        });
-
-        uploadedUrls.push(url);
-      }
-
-      // Merge with existing list
-      const next = [...value, ...uploadedUrls];
-      onChange?.(next);
-    } catch (err) {
-      console.error("Upload failed:", err);
-      alert("Upload failed: " + (err.message || err.code || "Unknown error"));
-    } finally {
-      setBusy(false);
-      setProgress(0);
-      if (inputRef.current) inputRef.current.value = "";
-    }
+  function removeAt(i) {
+    const next = photos.slice();
+    next.splice(i, 1);
+    onChange?.(next);
   }
 
-  async function removePhoto(url) {
-    // Try deleting the underlying object. It’s okay if it fails (e.g. token URL only).
+  async function handleFiles(e) {
+    setErr("");
+    const files = Array.from(e.target.files || []).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    e.target.value = ""; // allow re-selecting same file next time
+    if (!files.length) return;
+
+    // Enforce max
+    if (photos.length >= max) {
+      setErr(`Maximum ${max} photos.`);
+      return;
+    }
+
+    setBusy(true);
     try {
-      // Extract storage path from downloadURL if possible; otherwise skip delete.
-      // downloadURL format: .../o/<encodedPath>?alt=media&token=...
-      const m = url.match(/\/o\/([^?]+)\?/);
-      if (m) {
-        const encoded = m[1]; // e.g. photos%2Fuid%2Ffilename.jpg
-        const path = decodeURIComponent(encoded);
-        const ref = storageRef(storage, path);
-        await deleteObject(ref);
+      const uploads = [];
+      for (const file of files) {
+        // Simple person check
+        const face = await detectFaceInFile(file);
+        if (face.supported && face.hasFace === false) {
+          setErr("Please upload a photo where a person's face is visible.");
+          continue; // skip this file
+        }
+
+        // Upload to Storage
+        const safe = file.name.replace(/[^\w.\-]+/g, "_").slice(-80);
+        const path = `user-uploads/${uid}/${Date.now()}_${safe}`;
+        const r = ref(storage, path);
+        await uploadBytes(r, file, { contentType: file.type });
+        const url = await getDownloadURL(r);
+        uploads.push(url);
+        if (photos.length + uploads.length >= max) break;
+      }
+
+      if (uploads.length) {
+        onChange?.([...photos, ...uploads]);
       }
     } catch (e) {
-      // Non-fatal: maybe the URL isn't a standard downloadURL or permissions differ.
-      console.warn("Could not delete object for URL:", url, e);
+      console.error("PhotoUploader upload:", e);
+      setErr("Upload failed. Try a different image.");
     } finally {
-      const next = value.filter((u) => u !== url);
-      onChange?.(next);
+      setBusy(false);
     }
   }
 
   return (
     <div>
-      <div className="d-flex gap-2 mb-2">
+      {/* Controls row */}
+      <div className="d-flex align-items-center gap-3 mb-2">
         <button
           type="button"
-          className="btn btn-outline-light btn-sm"
-          onClick={pick}
-          disabled={busy}
+          className="btn p-0"
+          onClick={openPicker}
+          style={{
+            background: "transparent",
+            color: "#000",
+            textDecoration: "underline",
+            fontWeight: 600,
+          }}
         >
-          {busy ? `Uploading… ${progress}%` : "Add photos"}
+          + Add picture
         </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={handleFiles}
-        />
+        {busy && <span className="text-muted">Uploading…</span>}
       </div>
 
-      {value?.length > 0 ? (
-        <div className="d-flex flex-wrap gap-2">
-          {value.map((u) => (
-            <div
-              key={u}
-              className="position-relative"
-              style={{ width: 110, height: 110 }}
-            >
-              <img
-                src={u}
-                alt=""
-                style={{
-                  width: "110px",
-                  height: "110px",
-                  objectFit: "cover",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255,255,255,0.2)",
-                }}
-              />
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={handleFiles}
+      />
+
+      {err && <div className="alert alert-danger py-2">{err}</div>}
+
+      {/* Grid of circular thumbnails */}
+      {photos.length ? (
+        <div className="d-flex flex-wrap gap-3">
+          {photos.map((src, i) => (
+            <div key={src} style={{ position: "relative" }}>
               <button
                 type="button"
-                className="btn btn-sm btn-danger position-absolute"
-                style={{ top: 4, right: 4 }}
-                onClick={() => removePhoto(u)}
-                disabled={busy}
-                aria-label="Remove photo"
-                title="Remove"
+                onClick={() => { setViewerStart(i); setViewerOpen(true); }}
+                title="Click to enlarge"
+                style={{
+                  width: 120,
+                  height: 120,
+                  borderRadius: "50%",
+                  overflow: "hidden",
+                  padding: 0,
+                  border: "none",
+                  cursor: "zoom-in",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
+                  background: "transparent",
+                }}
               >
-                ✕
+                <img
+                  src={src}
+                  alt={`Photo ${i + 1}`}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                />
+              </button>
+
+              {/* Remove button */}
+              <button
+                type="button"
+                onClick={() => removeAt(i)}
+                aria-label="Remove photo"
+                className="btn btn-sm btn-light"
+                style={{
+                  position: "absolute",
+                  top: -8,
+                  right: -8,
+                  borderRadius: "50%",
+                  width: 28,
+                  height: 28,
+                  lineHeight: "14px",
+                  fontWeight: 700,
+                  boxShadow: "0 1px 6px rgba(0,0,0,0.25)",
+                }}
+              >
+                ×
               </button>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-light m-0">No photos yet.</p>
+        <div className="text-muted">No photos yet.</div>
+      )}
+
+      {viewerOpen && (
+        <Lightbox
+          photos={photos}
+          start={viewerStart}
+          onClose={() => setViewerOpen(false)}
+        />
       )}
     </div>
   );

@@ -19,14 +19,16 @@ import {
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// --- Firebase config (uses your key; falls back if env not set) ---
+// ⭐ App Check (reCAPTCHA v3)
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+
+// --- Firebase config ---
 const firebaseConfig = {
   apiKey:
     process.env.REACT_APP_FB_API_KEY ||
     "AIzaSyDUOk9E2SAXZvARgQSFQVeEGoRMWLWDbiI",
   authDomain: "review-45013.firebaseapp.com",
   projectId: "review-45013",
-  // ✅ correct Storage bucket for web SDK
   storageBucket: "review-45013.appspot.com",
   messagingSenderId: "198812507562",
   appId: "1:198812507562:web:fb9352cc9aafd3361a5fd3",
@@ -35,6 +37,25 @@ const firebaseConfig = {
 
 // Prevent double init in dev/hot-reload
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+// ⭐ App Check init (reCAPTCHA v3)
+// Use env if present, otherwise fall back to your provided site key.
+const RECAPTCHA_V3_SITE_KEY =
+  process.env.REACT_APP_APPCHECK_RECAPTCHA_KEY ||
+  "6LeYlL4rAAAAAKFe7yFiZYlYqEEO6g3OBQxhV_OR";
+
+// Enable debug token on localhost so uploads work with enforcement ON.
+// Copy the token printed in the browser console into
+// Firebase Console → App Check → Debug tokens.
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+  // eslint-disable-next-line no-restricted-globals
+  window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
+
+initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
+  isTokenAutoRefreshEnabled: true,
+});
 
 // SDK singletons
 export const auth = getAuth(app);
@@ -92,7 +113,7 @@ export async function ensureUserDoc(user, overrides = {}) {
     photos: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    // ✅ defaults ON so your email functions work automatically
+    // defaults ON so your email functions work automatically
     emailPrefs: { welcome: true, likes: true, messages: true },
   };
 
@@ -109,9 +130,6 @@ export async function ensureUserDoc(user, overrides = {}) {
 
 // Debug: confirm the app is using the right project
 if (process.env.NODE_ENV !== "production") {
-  // Should print: "Firebase projectId: review-45013"
-  // Open your browser console on Netlify and verify.
-  // If it prints something else, update the config above.
   // eslint-disable-next-line no-console
   console.log("Firebase projectId:", app.options.projectId);
 }
