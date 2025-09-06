@@ -1,101 +1,66 @@
-import React, { useEffect, useState } from "react";
-import AvatarWithBadge from "./AvatarWithBadge";
+// src/components/ZoomableAvatar.jsx
+import React from "react";
 
 /**
- * ZoomableAvatar
- * shape: "circle" | "rounded"
+ * Circular avatar that opens a lightbox when clicked (parent controls).
+ * Props:
+ *  - src: string (image URL)
+ *  - size: number (px)
+ *  - onClick: () => void
+ *  - verified: boolean (adds the Cartola badge)
  */
-export default function ZoomableAvatar({
-  src,
-  alt = "Profile photo",
-  size = 160,
-  rounded = 16,
-  verified = false,
-  badgeSrc = "/Cartola.png",
-  badgeSize = 36,
-  badgePosition = "tr",
-  className = "",
-  style = {},
-  largeRadius = 16,
-  shape = "rounded",
-}) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  const btnReset = {
-    background: "transparent",
-    border: "none",
-    padding: 0,
-    margin: 0,
-    cursor: "zoom-in",
-    display: "inline-block",
-    borderRadius: shape === "circle" ? "50%" : rounded,
-  };
-
-  const overlay = {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.75)",
-    backdropFilter: "blur(2px)",
-    zIndex: 1050,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "zoom-out",
-    padding: 16,
-  };
-  const largeImg = {
-    maxWidth: "92vw",
-    maxHeight: "92vh",
-    borderRadius: largeRadius,
-    boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
-    objectFit: "contain",
-    background: "#000",
-  };
-  const closeX = {
-    position: "fixed",
-    top: 12,
-    right: 16,
-    color: "#fff",
-    fontSize: 26,
-    lineHeight: 1,
-    cursor: "pointer",
-    userSelect: "none",
-  };
+export default function ZoomableAvatar({ src, size = 96, onClick, verified }) {
+  const fallback = "/logo.png"; // ✅ use existing asset
+  const url = src || fallback;
 
   return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} style={{ ...btnReset, ...style }} className={className} aria-label="Enlarge photo">
-        <AvatarWithBadge
-          src={src}
-          alt={alt}
-          size={size}
-          rounded={rounded}
-          verified={verified}
-          badgeSrc={badgeSrc}
-          badgeSize={badgeSize}
-          badgePosition={badgePosition}
-          shape={shape}
-        />
-      </button>
+    <div
+      role="button"
+      onClick={onClick}
+      className="position-relative"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        overflow: "hidden",
+        border: "2px solid rgba(255,255,255,0.6)",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+        cursor: "zoom-in",
+        backgroundColor: "#111",
+        display: "inline-block",
+      }}
+      title="Click to view"
+    >
+      <img
+        src={url}
+        alt="Profile"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+        onError={(e) => {
+          if (e.currentTarget.src !== window.location.origin + fallback) {
+            e.currentTarget.src = fallback;
+          }
+        }}
+      />
 
-      {open && (
-        <div style={overlay} onClick={() => setOpen(false)} aria-modal="true" role="dialog">
-          <span style={closeX} aria-hidden>&times;</span>
-          <img
-            src={src}
-            alt={alt}
-            style={largeImg}
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+      {verified && (
+        <img
+          src="/Cartola.png"
+          alt="Verified"
+          style={{
+            position: "absolute",
+            right: -4,
+            bottom: -4,
+            width: Math.round(size * 0.35),
+            height: Math.round(size * 0.35),
+            borderRadius: "50%",
+          }}
+        />
       )}
-    </>
+    </div>
   );
 }
