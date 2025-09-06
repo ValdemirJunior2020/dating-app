@@ -1,3 +1,4 @@
+// src/pages/Matches.jsx
 import React, { useEffect, useState } from "react";
 import { fetchUserMatches } from "../services/match";
 import { Link } from "react-router-dom";
@@ -54,7 +55,7 @@ export default function Matches() {
                     style={{
                       width: 160,
                       height: 160,
-                      borderRadius: "50%",         // circle
+                      borderRadius: "50%",
                       overflow: "hidden",
                       cursor: "zoom-in",
                       boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
@@ -73,7 +74,7 @@ export default function Matches() {
                   <p className="mb-3" style={{ color: "var(--text-light)" }}>{m.city || ""}</p>
                   <div className="d-flex justify-content-center gap-2">
                     <Link to={`/chat/${m.id}`} className="btn btn-primary btn-sm">Open Chat</Link>
-                    <Link to={`/profile/${m.id}`} className="btn btn-outline-light btn-sm">View Profile</Link>
+                    <Link to={`/u/${m.id}`} className="btn btn-outline-light btn-sm">View Profile</Link>
                   </div>
                 </div>
               </div>

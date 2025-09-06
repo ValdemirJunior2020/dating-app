@@ -51,3 +51,8 @@ Thumbs.db
 
 # Logs from pm2
 pmlogs
+
+sg.txt
+.env
+.env.local
+

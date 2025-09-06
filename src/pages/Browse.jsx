@@ -1,3 +1,4 @@
+// src/pages/Browse.js
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getAuth } from "firebase/auth";
@@ -17,7 +18,6 @@ export default function Browse() {
         const myUid = getAuth().currentUser?.uid;
         let list = [];
         snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-
         list = list
           .filter((u) => u.id !== myUid && (u.visible !== false))
           .sort((a, b) =>
@@ -25,7 +25,6 @@ export default function Browse() {
               .toLowerCase()
               .localeCompare(String(b.displayName || b.name || "").toLowerCase())
           );
-
         if (mounted) {
           setUsers(list);
           setLoading(false);
@@ -77,7 +76,7 @@ export default function Browse() {
                     src={photo}
                     alt={name}
                     size={180}
-                    shape="circle"     // <-- circle avatar
+                    shape="circle"
                     verified={isCollegeVerified}
                     badgeSize={36}
                     badgePosition="br"
@@ -98,7 +97,7 @@ export default function Browse() {
                   )}
                   <div className="mt-auto d-flex gap-2">
                     <Link className="btn btn-primary" to={`/chat/with/${u.id}`}>Say hi</Link>
-                    <Link className="btn btn-outline-secondary" to={`/profile/${u.id}`}>View profile</Link>
+                    <Link className="btn btn-outline-secondary" to={`/u/${u.id}`}>View profile</Link>
                   </div>
                 </div>
 

@@ -21,8 +21,10 @@ import ResetPassword from "./pages/ResetPassword";
 import EduSignUp from "./pages/EduSignUp";
 import AdminDashboard from "./pages/AdminDashboard";
 
-// ⬅️ Your existing self-only profile page
+// Your self-only profile page (editable)
 import Profile from "./pages/Profile";
+// New read-only public profile
+import PublicProfile from "./pages/PublicProfile";
 
 export default function App() {
   return (
@@ -125,7 +127,7 @@ export default function App() {
           }
         />
 
-        {/* Settings (private, not gated by college/photo so users can complete profile) */}
+        {/* Settings (private, not gated by photo so users can complete profile) */}
         <Route
           path="/settings"
           element={
@@ -135,7 +137,7 @@ export default function App() {
           }
         />
 
-        {/* ✅ Self profile (the file you already have) */}
+        {/* Self profile (editable) */}
         <Route
           path="/profile"
           element={
@@ -145,15 +147,13 @@ export default function App() {
           }
         />
 
-        {/* 🧩 Temporary: route /profile/:uid to the same component to avoid 404s.
-            It will still show YOUR profile (since the component uses auth.currentUser).
-            Next step we’ll add a dedicated public profile page for viewing others. */}
+        {/* Read-only public profile for other users */}
         <Route
-          path="/profile/:uid"
+          path="/u/:uid"
           element={
             <RequireAuth>
               <RequireCollegeVerified>
-                <Profile />
+                <PublicProfile />
               </RequireCollegeVerified>
             </RequireAuth>
           }

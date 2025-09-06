@@ -60,7 +60,7 @@ export default function PhotoUploader({ value = [], onChange, max = 6 }) {
         }
 
         // Upload to Storage
-        const safe = file.name.replace(/[^\w.\-]+/g, "_").slice(-80);
+        const safe = file.name.replace(/[^\w.-]+/g, "_").slice(-80); // <- no-useless-escape fixed
         const path = `user-uploads/${uid}/${Date.now()}_${safe}`;
         const r = ref(storage, path);
         await uploadBytes(r, file, { contentType: file.type });
@@ -118,6 +118,7 @@ export default function PhotoUploader({ value = [], onChange, max = 6 }) {
             <div key={src} style={{ position: "relative" }}>
               <button
                 type="button"
+                aria-label={`Open upload ${i + 1}`}  // accessible name on button
                 onClick={() => { setViewerStart(i); setViewerOpen(true); }}
                 title="Click to enlarge"
                 style={{
@@ -134,7 +135,8 @@ export default function PhotoUploader({ value = [], onChange, max = 6 }) {
               >
                 <img
                   src={src}
-                  alt={`Photo ${i + 1}`}
+                  alt=""                // <- no “photo/image/picture” word; decorative
+                  aria-hidden="true"    // <- screen readers use the button label instead
                   style={{
                     width: "100%",
                     height: "100%",
