@@ -109,10 +109,11 @@ export default function Chat() {
 
   if (!matchId) {
     return (
-      <div className="container py-5 text-center">
-        <h4>Messages</h4>
-        <p className="text-muted">Select someone from Matches, or start a chat from Browse.</p>
-      </div>
+      <div className="container py-5 text-center text-white">
+  <h4>Messages</h4>
+  <p>Select someone from Matches, or start a chat from Browse.</p>
+</div>
+
     );
   }
 

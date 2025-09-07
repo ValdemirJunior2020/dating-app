@@ -3,28 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#2a180c" />
+    <meta name="theme-color" content="#522703" />
     <title>Candle Love</title>
 
-    <!-- Basic SEO / Social -->
     <meta name="description" content="Candle Love — real people, real connections." />
-    <meta property="og:title" content="Candle Love" />
-    <meta property="og:description" content="Real people, real connections." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://thecandlelove.com" />
-    <meta property="og:image" content="%PUBLIC_URL%/logo.png" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Candle Love" />
-    <meta name="twitter:description" content="Real people, real connections." />
-    <meta name="twitter:image" content="%PUBLIC_URL%/logo.png" />
 
-    <!-- Favicon / icons (using your public/logo.png) -->
+    <!-- Favicon / icons -->
     <link rel="icon" href="%PUBLIC_URL%/logo.png" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo.png" sizes="180x180" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Base color so first paint matches brand while image loads -->
+    <style>body{background-color:#522703;}</style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+
     <div id="root"></div>
+
+    <!-- ⤵️ Seasonal background (no React changes) -->
+    <script defer src="%PUBLIC_URL%/seasonal-bg.js"></script>
   </body>
 </html>

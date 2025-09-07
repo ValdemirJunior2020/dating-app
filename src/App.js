@@ -1,4 +1,5 @@
 // src/App.js
+
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
@@ -7,6 +8,7 @@ import RequireAuth from "./components/RequireAuth";
 import RequireCollegeVerified from "./components/RequireCollegeVerified";
 import RequireProfilePhoto from "./components/RequireProfilePhoto";
 import ImageLightboxRoot from "./components/ImageLightbox";
+
 
 // Pages
 import Home from "./pages/Home";
