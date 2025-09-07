@@ -28,6 +28,7 @@ export default function NavBar() {
         <Link className="navbar-brand fw-bold" to="/">
           <img src="/logo.png" alt="Candle Love logo" height="40" className="me-2" />
           <span className="brand-cursive">Candle Love</span>
+
         </Link>
 
         {/* Hamburger (mobile) */}

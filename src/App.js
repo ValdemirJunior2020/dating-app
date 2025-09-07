@@ -1,5 +1,4 @@
 // src/App.js
-
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
@@ -8,7 +7,6 @@ import RequireAuth from "./components/RequireAuth";
 import RequireCollegeVerified from "./components/RequireCollegeVerified";
 import RequireProfilePhoto from "./components/RequireProfilePhoto";
 import ImageLightboxRoot from "./components/ImageLightbox";
-
 
 // Pages
 import Home from "./pages/Home";
@@ -22,6 +20,7 @@ import SignUp from "./pages/SignUp";
 import EmailLogin from "./pages/EmailLogin";
 import ResetPassword from "./pages/ResetPassword";
 import EduSignUp from "./pages/EduSignUp";
+import PublicProfile from "./pages/PublicProfile"; // 👈 NEW
 
 export default function App() {
   return (
@@ -36,6 +35,16 @@ export default function App() {
         <Route path="/login-email" element={<EmailLogin />} />
         <Route path="/reset" element={<ResetPassword />} />
         <Route path="/edu-signup" element={<EduSignUp />} />
+
+        {/* View a user's public profile (requires sign-in, but not college check) */}
+        <Route
+          path="/u/:uid"
+          element={
+            <RequireAuth>
+              <PublicProfile />
+            </RequireAuth>
+          }
+        />
 
         {/* Private */}
         <Route

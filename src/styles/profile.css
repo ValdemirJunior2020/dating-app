@@ -1,0 +1,53 @@
+.public-profile {
+  color: #fff; /* white text */
+}
+
+.pp-card {
+  background: rgba(0,0,0,0.55);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.pp-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.pp-name {
+  font-weight: bold;
+  font-size: 1.8rem;
+  color: #fff;
+}
+
+.pp-subtle {
+  color: #ddd;
+  font-size: 0.9rem;
+}
+
+.pp-label {
+  font-weight: 700;
+  color: #ff9e2c; /* your brand amber */
+  margin-bottom: 0.25rem;
+}
+
+.pp-value {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.pp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.pp-photo {
+  background-size: cover;
+  background-position: center;
+  aspect-ratio: 1/1;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+}

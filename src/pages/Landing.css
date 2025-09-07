@@ -1,4 +1,4 @@
-/* Chocolate background version */
+/* Chocolate background version (seasonal-friendly) */
 
 :root {
   --choco:      #7e3c05;   /* rich chocolate brown */
@@ -9,18 +9,18 @@
   --text-light: #fff8e6;
 }
 
-/* Root wrapper */
+/* Fallback color behind the seasonal image (body/#root get the image) */
+body, html {
+  background-color: var(--choco);
+}
+
+/* Root wrapper — let seasonal BG from body/#root be visible */
 .landing-root {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  background: var(--choco);   /* <-- solid chocolate bg */
+  background: transparent !important; /* <-- key change */
   color: var(--text-light);
-}
-
-/* Force background color for ALL devices (desktop + mobile) */
-body, html {
-  background-color: var(--choco);
 }
 
 /* Mosaic grid */
@@ -32,7 +32,7 @@ body, html {
   grid-auto-rows: 90px;
   gap: 6px;
   padding: 6px;
-  opacity: 0.85;
+  opacity: 0.30; /* adjust if you want more seasonal BG to show */
 }
 .mosaic-cell {
   background-size: cover;
@@ -42,11 +42,11 @@ body, html {
   filter: saturate(1) brightness(0.9);
 }
 
-/* fallback if no images */
+/* Fallback when no images — also transparent so seasonal BG shows */
 .mosaic-fallback {
   position: fixed;
   inset: 0;
-  background: var(--choco);
+  background: transparent !important; /* <-- key change */
 }
 
 /* Blur overlay */

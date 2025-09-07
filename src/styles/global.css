@@ -1,34 +1,12 @@
-/* === Site-wide full background (uses your PNG in public/images) === */
-body {
-  /* brand base + subtle dark overlay for readability */
-  background-color: #522703;
-  background-image:
-    linear-gradient(rgba(0,0,0,.28), rgba(0,0,0,.28)),
-    /* use absolute URL so webpack doesn't try to resolve it */
-    url("https://thecandlelove.com/images/thanks_giving_bg.png");
-  /* If you prefer to load from local dev instead, swap the line above for:
-     url("http://localhost:3000/images/thanks_giving_bg.png"); */
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
-  min-height: 100vh;
-}
-@media (min-width: 1024px) {
-  body { background-attachment: fixed; } /* desktop only for smoothness */
-}
-
 /* === Auth Page Styling === */
-/* changed to transparent so the body background shows through */
-/* src/styles/global.css */
 .auth-page {
-  background-color: transparent !important; /* was solid; make it transparent */
+  background: #522703 !important; /* solid chocolate brown */
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
 }
-
 
 /* Auth Card overrides */
 .auth-card {
@@ -56,10 +34,13 @@ body {
   text-decoration: underline;
 }
 
-/* Brand wordmark (ensure it survives global !important light text) */
-.brand-cursive {
-  font-family: 'Great Vibes', cursive;
-  font-weight: 700;
-  color: var(--amber) !important;
-  text-shadow: 0 0 4px rgba(216,122,18,0.45);
+/* Force Candle Love brand styling everywhere */
+.brand-cursive,
+.navbar-brand .brand-cursive,
+.offcanvas-title.brand-cursive {
+  font-family: 'Great Vibes', cursive !important;
+  font-weight: 700 !important;
+  color: rgb(255, 158, 44) !important; /* Amber brand color */
+  text-shadow: 0 0 6px rgba(216, 122, 18, 0.55) !important;
+  letter-spacing: 0.5px !important;
 }
