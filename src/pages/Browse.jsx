@@ -1,118 +1,102 @@
-// src/pages/Browse.js
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { getAuth } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
+// src/pages/Browse.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { db } from "../firebase";
+import { Link } from "react-router-dom";
 import ZoomableAvatar from "../components/ZoomableAvatar";
+import Lightbox from "../components/Lightbox";
+import cleanPhotos from "../utils/cleanPhotos";
 
 export default function Browse() {
-  const [users, setUsers] = useState([]);
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerImages, setViewerImages] = useState([]);
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
     (async () => {
       try {
-        const snap = await getDocs(collection(db, "users"));
-        const myUid = getAuth().currentUser?.uid;
-        let list = [];
-        snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-        list = list
-          .filter((u) => u.id !== myUid && (u.visible !== false))
-          .sort((a, b) =>
-            String(a.displayName || a.name || "")
-              .toLowerCase()
-              .localeCompare(String(b.displayName || b.name || "").toLowerCase())
-          );
-        if (mounted) {
-          setUsers(list);
-          setLoading(false);
-        }
+        // 🔁 No 'visible == true' for now so existing users show up again
+        const q = query(
+          collection(db, "users"),
+          orderBy("updatedAt", "desc"),
+          limit(48)
+        );
+        const snap = await getDocs(q);
+        if (!active) return;
+        setRows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       } catch (e) {
-        console.error("Browse load users:", e);
-        if (mounted) setLoading(false);
+        console.error("Browse load:", e);
+      } finally {
+        if (active) setLoading(false);
       }
     })();
-    return () => { mounted = false; };
+    return () => { active = false; };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="container py-5 text-center">
-        <div className="spinner-border" role="status" />
-        <div className="mt-2">Loading people…</div>
-      </div>
-    );
-  }
+  const cards = useMemo(() => {
+    return rows.map((u) => {
+      const photos = cleanPhotos(u.photos || []);
+      const urls = photos
+        .map((p) => (typeof p === "string" ? p : p?.url))
+        .filter(Boolean);
+      const primary = urls[0] || "/logo.png"; // fallback; put any image at public/logo.png
+      const name = u.displayName || u.name || "Someone";
 
-  if (!users.length) {
-    return (
-      <div className="container py-5 text-center">
-        <h3>No profiles yet</h3>
-        <p className="text-muted">Check back soon—new people join every day.</p>
-      </div>
-    );
-  }
+      // broad check for your edu flag
+      const verified =
+        !!(u?.verification?.college ||
+           u?.eduVerified ||
+           u?.isCollege ||
+           u?.collegeVerified ||
+           u?.type === "edu" ||
+           (Array.isArray(u?.badges) && u.badges.includes("edu")));
+
+      return { id: u.uid || u.id, name, primary, urls, verified };
+    });
+  }, [rows]);
+
+  const openViewer = (images) => {
+    setViewerImages(images.length ? images : ["/logo.png"]);
+    setViewerOpen(true);
+  };
+
+  if (loading) return <div className="container py-5">Loading…</div>;
 
   return (
     <div className="container py-4">
       <h2 className="mb-3">Browse</h2>
 
-      <div className="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
-        {users.map((u) => {
-          const name = u.displayName || u.name || "Someone";
-          const photo =
-            u.photoURL ||
-            (u.photos && Array.isArray(u.photos) && (typeof u.photos[0] === "string" ? u.photos[0] : u.photos[0]?.url)) ||
-            "/default-avatar.png";
-          const isCollegeVerified = !!u?.verification?.college;
-
-          return (
-            <div className="col" key={u.id}>
-              <div className="card h-100 shadow-sm" style={{ border: "none", borderRadius: 20 }}>
-                <div className="pt-3 text-center">
-                  <ZoomableAvatar
-                    src={photo}
-                    alt={name}
-                    size={180}
-                    shape="circle"
-                    verified={isCollegeVerified}
-                    badgeSize={36}
-                    badgePosition="br"
-                  />
-                </div>
-
-                <div className="card-body d-flex flex-column">
-                  <h5 className="card-title mb-1">{name}</h5>
-                  {u.school && (
-                    <div className="text-muted" style={{ fontSize: 14 }}>
-                      {u.school}
-                    </div>
-                  )}
-                  {u.bio && (
-                    <p className="card-text mt-2" style={{ fontSize: 14 }}>
-                      {String(u.bio).length > 120 ? String(u.bio).slice(0, 117) + "…" : u.bio}
-                    </p>
-                  )}
-                  <div className="mt-auto d-flex gap-2">
-                    <Link className="btn btn-primary" to={`/chat/with/${u.id}`}>Say hi</Link>
-                    <Link className="btn btn-outline-secondary" to={`/u/${u.id}`}>View profile</Link>
+      <div className="row g-4">
+        {cards.map((u) => (
+          <div key={u.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
+            <div className="card shadow-sm h-100">
+              <div className="card-body d-flex flex-column align-items-center">
+                <ZoomableAvatar
+                  src={u.primary}
+                  size={160}
+                  verified={u.verified}
+                  onClick={() => openViewer(u.urls)}
+                />
+                <div className="text-center mt-3 w-100">
+                  <div className="fw-semibold">{u.name}</div>
+                  <div className="d-flex justify-content-center gap-2 mt-2">
+                    <Link className="btn btn-warning btn-sm" to={`/chat/with/${u.id}`}>Say hi</Link>
+                    <Link className="btn btn-outline-secondary btn-sm" to={`/u/${u.id}`}>View profile</Link>
                   </div>
                 </div>
-
-                {isCollegeVerified && (
-                  <div className="px-3 pb-3" style={{ fontSize: 12, color: "#6b4b1f" }}>
-                    <span className="badge" style={{ background: "#fff8e6", border: "1px solid #ffcf7a", color: "#6b4b1f", fontWeight: 600 }}>
-                      College verified
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
+
+      <Lightbox
+        open={viewerOpen}
+        images={viewerImages}
+        onClose={() => setViewerOpen(false)}
+      />
     </div>
   );
 }

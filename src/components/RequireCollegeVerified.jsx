@@ -1,110 +1,61 @@
+// src/components/RequireCollegeVerified.jsx
 import React, { useEffect, useState } from "react";
-import { getAuth } from "firebase/auth";
+import { auth, db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
-import { Link, Navigate, useLocation } from "react-router-dom";
+import useIsAdmin from "../hooks/useIsAdmin";
 
-/**
- * Allows access if ANY of these are true:
- *  - user is ADMIN (custom claim admin === true OR users/{uid}.roles.admin === true)
- *  - custom claim eduVerified === true
- *  - users/{uid}.verification.college === true
- *  - verifiedEduEmails/{email} exists
- */
 export default function RequireCollegeVerified({ children }) {
-  const [status, setStatus] = useState("loading"); // loading | ok | blocked | noauth
-  const [reason, setReason] = useState("");
-  const auth = getAuth();
-  const user = auth.currentUser;
-  const location = useLocation();
+  const u = auth.currentUser;
+  const isAdmin = useIsAdmin();
+  const [ok, setOk] = useState(null);
 
   useEffect(() => {
-    let active = true;
+    let cancelled = false;
     (async () => {
-      if (!user) {
-        setStatus("noauth");
-        return;
-      }
+      if (!u) return setOk(false);
+      if (isAdmin) return setOk(true); // ✅ admin bypass
+
       try {
-        // Refresh token to get latest custom claims
-        const token = await user.getIdTokenResult(true);
+        // flags on user doc
+        const snap = await getDoc(doc(db, "users", u.uid));
+        const d = snap.exists() ? snap.data() : {};
+        const docOk =
+          !!(d?.verification?.college ||
+             d?.eduVerified ||
+             d?.isCollege ||
+             d?.collegeVerified ||
+             d?.type === "edu" ||
+             (Array.isArray(d?.badges) && d.badges.includes("edu")));
 
-        // 1) Admin bypass
-        const isAdminClaim = !!token?.claims?.admin;
-        let isAdminFirestore = false;
-        try {
-          const us = await getDoc(doc(db, "users", user.uid));
-          isAdminFirestore = us.exists() && !!us.data()?.roles?.admin;
-        } catch (_) {}
-        if (isAdminClaim || isAdminFirestore) {
-          if (active) setStatus("ok");
-          return;
-        }
+        if (docOk) return setOk(true);
 
-        // 2) College-verified checks
-        if (token?.claims?.eduVerified) {
-          if (active) setStatus("ok");
-          return;
+        // fallback: verifiedEduEmails/{email}
+        const email = (u.email || "").toLowerCase();
+        if (email) {
+          const vs = await getDoc(doc(db, "verifiedEduEmails", email));
+          if (vs.exists()) return setOk(true);
         }
-
-        let isCollegeProfile = false;
-        try {
-          const uSnap = await getDoc(doc(db, "users", user.uid));
-          isCollegeProfile = uSnap.exists() && !!uSnap.data()?.verification?.college;
-        } catch (_) {}
-        if (isCollegeProfile) {
-          if (active) setStatus("ok");
-          return;
-        }
-
-        if (user.email) {
-          const vSnap = await getDoc(doc(db, "verifiedEduEmails", user.email.toLowerCase()));
-          if (vSnap.exists()) {
-            if (active) setStatus("ok");
-            return;
-          }
-        }
-
-        if (active) {
-          setStatus("blocked");
-          setReason("To continue, verify a .edu email.");
-        }
+        if (!cancelled) setOk(false);
       } catch (e) {
         console.error("RequireCollegeVerified:", e);
-        if (active) {
-          setStatus("blocked");
-          setReason("We couldn't confirm your .edu verification.");
-        }
+        if (!cancelled) setOk(false);
       }
     })();
-    return () => { active = false; };
-  }, [user]);
+    return () => { cancelled = true; };
+  }, [u, isAdmin]);
 
-  if (status === "loading") {
+  if (ok === null) return <div className="container py-5">Checking access…</div>;
+  if (!ok) {
     return (
-      <div className="container py-5 text-center">
-        <div className="spinner-border" role="status" />
-        <div className="mt-2">Checking access…</div>
-      </div>
-    );
-  }
-
-  if (status === "noauth") {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  if (status === "blocked") {
-    return (
-      <div className="container py-5" style={{ maxWidth: 600 }}>
-        <h3>College verification required</h3>
-        <p className="text-muted">{reason}</p>
-        <div className="d-flex gap-2">
-          <Link className="btn btn-warning" to="/edu-signup">Verify .edu email</Link>
-          <Link className="btn btn-outline-secondary" to="/">Back home</Link>
+      <div className="container py-5">
+        <div className="alert alert-warning">
+          College verification is required to access this page.
+          <div className="mt-3">
+            <a href="/edu-signup" className="btn btn-primary btn-sm">Verify .edu email</a>
+          </div>
         </div>
       </div>
     );
   }
-
   return children;
 }
