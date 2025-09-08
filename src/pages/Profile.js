@@ -5,6 +5,9 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import cleanPhotos from "../utils/cleanPhotos";
 import { needsPhotoEncouragement } from "../services/users";
 import EditableText from "../components/EditableText";
+import InterestsSelector from "../components/InterestsSelector";
+import { getUserInterests, setUserInterests } from "../services/interests";
+import { useAuth } from "../context/AuthContext"; // if you already import this, skip
 
 export default function Profile() {
   const uid = auth.currentUser?.uid;

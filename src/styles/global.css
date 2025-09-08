@@ -1,3 +1,4 @@
+
 /* === Auth Page Styling === */
 .auth-page {
   background: #522703 !important; /* solid chocolate brown */
@@ -44,3 +45,16 @@
   text-shadow: 0 0 6px rgba(216, 122, 18, 0.55) !important;
   letter-spacing: 0.5px !important;
 }
+
+
+
+
+
+/* Space below navbar so page content starts lower */
+.content-offset {
+  padding-top: 48px;
+}
+@media (min-width: 768px) {
+  .content-offset { padding-top: 64px; }
+}
+

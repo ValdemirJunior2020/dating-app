@@ -20,94 +20,122 @@ import SignUp from "./pages/SignUp";
 import EmailLogin from "./pages/EmailLogin";
 import ResetPassword from "./pages/ResetPassword";
 import EduSignUp from "./pages/EduSignUp";
-import PublicProfile from "./pages/PublicProfile"; // 👈 NEW
+import PublicProfile from "./pages/PublicProfile";
+
+// New pages we added earlier
+import Discover from "./pages/Discover";
+import ProfileInterests from "./pages/ProfileInterests";
 
 export default function App() {
   return (
     <>
       <ImageLightboxRoot />
       <NavBar />
-      <Routes>
-        {/* Public */}
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/login-email" element={<EmailLogin />} />
-        <Route path="/reset" element={<ResetPassword />} />
-        <Route path="/edu-signup" element={<EduSignUp />} />
 
-        {/* View a user's public profile (requires sign-in, but not college check) */}
-        <Route
-          path="/u/:uid"
-          element={
-            <RequireAuth>
-              <PublicProfile />
-            </RequireAuth>
-          }
-        />
+      {/* 👇 wrapper that adds a little space before page content on all routes */}
+      <main className="content-offset">
+        <Routes>
+          {/* Public */}
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<SignUp />} />
+          <Route path="/login-email" element={<EmailLogin />} />
+          <Route path="/reset" element={<ResetPassword />} />
+          <Route path="/edu-signup" element={<EduSignUp />} />
 
-        {/* Private */}
-        <Route
-          path="/browse"
-          element={
-            <RequireAuth>
-              <RequireCollegeVerified>
-                <RequireProfilePhoto>
-                  <Browse />
-                </RequireProfilePhoto>
-              </RequireCollegeVerified>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/matches"
-          element={
-            <RequireAuth>
-              <Matches />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/online"
-          element={
-            <RequireAuth>
-              <Online />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/chat"
-          element={
-            <RequireAuth>
-              <Chat />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/chat/:matchId"
-          element={
-            <RequireAuth>
-              <Chat />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/chat/with/:otherUid"
-          element={
-            <RequireAuth>
-              <Chat />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <RequireAuth>
-              <Settings />
-            </RequireAuth>
-          }
-        />
-      </Routes>
+          {/* View a user's public profile (requires sign-in, but not college check) */}
+          <Route
+            path="/u/:uid"
+            element={
+              <RequireAuth>
+                <PublicProfile />
+              </RequireAuth>
+            }
+          />
+
+          {/* Private */}
+          <Route
+            path="/browse"
+            element={
+              <RequireAuth>
+                <RequireCollegeVerified>
+                  <RequireProfilePhoto>
+                    <Browse />
+                  </RequireProfilePhoto>
+                </RequireCollegeVerified>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/matches"
+            element={
+              <RequireAuth>
+                <Matches />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/online"
+            element={
+              <RequireAuth>
+                <Online />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <RequireAuth>
+                <Chat />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/chat/:matchId"
+            element={
+              <RequireAuth>
+                <Chat />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/chat/with/:otherUid"
+            element={
+              <RequireAuth>
+                <Chat />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <Settings />
+              </RequireAuth>
+            }
+          />
+
+          {/* Discover by shared interests */}
+          <Route
+            path="/discover"
+            element={
+              <RequireAuth>
+                <Discover />
+              </RequireAuth>
+            }
+          />
+
+          {/* Edit interests (separate page) */}
+          <Route
+            path="/profile/interests"
+            element={
+              <RequireAuth>
+                <ProfileInterests />
+              </RequireAuth>
+            }
+          />
+        </Routes>
+      </main>
     </>
   );
 }

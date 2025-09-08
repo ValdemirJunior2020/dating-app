@@ -1,0 +1,51 @@
+/* Force white + bold text for this page only */
+.discover-page,
+.discover-page * {
+  color: #fff !important;
+  font-weight: 700 !important;
+}
+
+/* Keep cards/boxes slightly visible on dark backgrounds */
+.discover-page .discover-hint,
+.discover-page .discover-empty,
+.discover-page .discover-loading {
+  border: 1px dashed rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.25);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+/* Titles */
+.discover-page .discover-title {
+  margin: 0 0 2px 0;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.discover-page .discover-sub {
+  margin: 0 0 10px 0;
+  opacity: 0.95;
+}
+
+/* Inputs inside this page (from InterestsSelector) */
+.discover-page input {
+  background: rgba(0,0,0,0.35) !important;
+  border: 1px solid rgba(255,255,255,0.45) !important;
+}
+.discover-page input::placeholder {
+  color: rgba(255,255,255,0.9);
+  font-weight: 700;
+}
+
+/* Buttons (interest chips) */
+.discover-page button {
+  border-color: rgba(255,255,255,0.45) !important;
+  background: rgba(255,255,255,0.08) !important;
+}
+.discover-page button:hover {
+  background: rgba(255,255,255,0.18) !important;
+}
+
+/* Selected chips get a brighter treatment */
+.discover-page .is-active {
+  background: rgba(255,255,255,0.9) !important;
+  color: #1a1a1a !important;
+}

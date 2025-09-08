@@ -6,7 +6,7 @@ import "./NavBar.css";
 
 function firstNameFrom(user) {
   const dn = user?.displayName || user?.name || "";
-  if (dn.trim()) return dn.split(" ")[0];
+  if (dn && dn.trim()) return dn.split(" ")[0];
   const em = user?.email || "";
   return em ? em.split("@")[0] : "You";
 }
@@ -17,23 +17,20 @@ function initialFrom(user) {
 }
 
 export default function NavBar() {
-  const { user } = useAuth();
-  const first = firstNameFrom(user);
-  const initial = initialFrom(user);
+  const auth = useAuth() || {};
+  const user = auth.currentUser || auth.user || null;
 
   return (
-    <nav className="navbar navbar-expand-md sticky-top">
+    <nav className="navbar navbar-expand-md navbar-light border-bottom">
       <div className="container">
-        {/* Brand: logo + name */}
-        <Link className="navbar-brand fw-bold" to="/">
-          <img src="/logo.png" alt="Candle Love logo" height="40" className="me-2" />
-          <span className="brand-cursive">Candle Love</span>
-
+        {/* Brand */}
+        <Link className="navbar-brand brand-cursive" to="/">
+          Candle Love
         </Link>
 
-        {/* Hamburger (mobile) */}
+        {/* Mobile toggler (opens offcanvas) */}
         <button
-          className="navbar-toggler d-inline-flex d-md-none"
+          className="navbar-toggler d-md-none"
           type="button"
           data-bs-toggle="offcanvas"
           data-bs-target="#mnav"
@@ -43,77 +40,61 @@ export default function NavBar() {
           <span className="navbar-toggler-icon" />
         </button>
 
-        {/* Desktop menu */}
-        <div className="d-none d-md-flex ms-auto align-items-center gap-3">
-          {user && (
-            <div className="user-chip" title="You're logged in">
-              <div className="avatar">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="" />
-                ) : (
-                  <span className="initial">{initial}</span>
-                )}
-                <span className="online" />
-              </div>
-              <div className="user-text">
-                <span className="hello">Hi,</span>{" "}
-                <span className="name">{first}</span>
-              </div>
-            </div>
-          )}
+        {/* Desktop nav */}
+        <div className="collapse navbar-collapse d-none d-md-block">
+          <div className="ms-auto">
+            <ul className="navbar-nav align-items-center gap-2">
+              <li className="nav-item">
+                <NavLink className="nav-link" to="/">Home</NavLink>
+              </li>
 
-          <ul className="navbar-nav align-items-center gap-2">
-            <li className="nav-item">
-              <NavLink className="nav-link" to="/">Home</NavLink>
-            </li>
+              {user ? (
+                <>
+                  <li className="nav-item"><NavLink className="nav-link" to="/browse">Browse</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/matches">Matches</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/chat">Chat</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/settings">Settings</NavLink></li>
 
-            {user ? (
-              <>
-                <li className="nav-item"><NavLink className="nav-link" to="/browse">Browse</NavLink></li>
-                <li className="nav-item"><NavLink className="nav-link" to="/matches">Matches</NavLink></li>
-                <li className="nav-item"><NavLink className="nav-link" to="/chat">Chat</NavLink></li>
-                <li className="nav-item"><NavLink className="nav-link" to="/settings">Settings</NavLink></li>
-                <li className="nav-item">
-                  <button className="btn btn-sm btn-outline-light" onClick={logOut}>Log out</button>
-                </li>
-              </>
-            ) : (
-              <>
-                <li className="nav-item"><NavLink className="nav-link" to="/login">Login</NavLink></li>
-                <li className="nav-item"><NavLink className="nav-link" to="/signup">Sign Up</NavLink></li>
-              </>
-            )}
-          </ul>
+                  {/* Added links */}
+                  <li className="nav-item"><NavLink className="nav-link" to="/discover">Discover</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/profile/interests">Interests</NavLink></li>
+
+                  {/* User chip + logout */}
+                  <li className="nav-item d-flex align-items-center">
+                    <div className="user-chip">
+                      <div className="avatar" title={user?.email || ""}>
+                        <span className="initial">{initialFrom(user)}</span>
+                        <span className="online" />
+                      </div>
+                      <div className="user-text d-none d-lg-block">
+                        <div className="hello">Hi,</div>
+                        <div className="name">{firstNameFrom(user)}</div>
+                      </div>
+                      <button className="btn btn-sm btn-outline-light border" onClick={logOut}>
+                        Log out
+                      </button>
+                    </div>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li className="nav-item"><NavLink className="nav-link" to="/login">Login</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/signup">Sign Up</NavLink></li>
+                </>
+              )}
+            </ul>
+          </div>
         </div>
 
         {/* Mobile offcanvas */}
         <div className="offcanvas offcanvas-end d-md-none" tabIndex="-1" id="mnav" aria-labelledby="mnavLabel">
           <div className="offcanvas-header">
             <h5 className="offcanvas-title brand-cursive" id="mnavLabel">Candle Love</h5>
-            <button type="button" className="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            <button type="button" className="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close" />
           </div>
 
           <div className="offcanvas-body">
-            {user && (
-              <div className="mb-3">
-                <div className="user-chip w-100 justify-content-start">
-                  <div className="avatar">
-                    {user.photoURL ? (
-                      <img src={user.photoURL} alt="" />
-                    ) : (
-                      <span className="initial">{initial}</span>
-                    )}
-                    <span className="online" />
-                  </div>
-                  <div className="user-text">
-                    <span className="hello">Hi,</span>{" "}
-                    <span className="name">{first}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <ul className="navbar-nav ms-auto gap-2">
+            <ul className="navbar-nav align-items-start gap-2">
               <li className="nav-item">
                 <NavLink className="nav-link" to="/" data-bs-dismiss="offcanvas">Home</NavLink>
               </li>
@@ -124,8 +105,15 @@ export default function NavBar() {
                   <li className="nav-item"><NavLink className="nav-link" to="/matches" data-bs-dismiss="offcanvas">Matches</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/chat" data-bs-dismiss="offcanvas">Chat</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/settings" data-bs-dismiss="offcanvas">Settings</NavLink></li>
-                  <li className="nav-item">
-                    <button className="btn btn-sm btn-outline-light" onClick={logOut} data-bs-dismiss="offcanvas">Log out</button>
+
+                  {/* Added links */}
+                  <li className="nav-item"><NavLink className="nav-link" to="/discover" data-bs-dismiss="offcanvas">Discover</NavLink></li>
+                  <li className="nav-item"><NavLink className="nav-link" to="/profile/interests" data-bs-dismiss="offcanvas">Interests</NavLink></li>
+
+                  <li className="nav-item mt-2">
+                    <button className="btn btn-sm btn-outline-light border" onClick={logOut} data-bs-dismiss="offcanvas">
+                      Log out
+                    </button>
                   </li>
                 </>
               ) : (
