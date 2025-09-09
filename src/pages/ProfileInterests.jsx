@@ -3,9 +3,15 @@ import React from "react";
 import { useAuth } from "../context/AuthContext";
 import InterestsSelector from "../components/InterestsSelector";
 import { getUserInterests, setUserInterests } from "../services/interests";
+import { recordEvent, BADGES } from "../services/gamification";
+import { useToast } from "../components/Toaster";
+
+const INTERESTS_BADGE_ID = "interests_set";
 
 export default function ProfileInterests() {
   const { currentUser } = useAuth() || {};
+  const toast = useToast();
+
   const [interests, setInterests] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -22,6 +28,34 @@ export default function ProfileInterests() {
     })();
     return () => { alive = false; };
   }, [currentUser?.uid]);
+
+  const handleSave = async () => {
+    if (!currentUser?.uid) return;
+    setSaving(true);
+    try {
+      await setUserInterests(currentUser.uid, interests);
+      // always show a small "saved" toast
+      toast.show({ title: "Interests saved", icon: "✅", duration: 2200 });
+
+      // record the event, then toast the badge once if it becomes true
+      const res = await recordEvent(currentUser.uid, "interests_saved");
+      const b = BADGES.find(x => x.id === INTERESTS_BADGE_ID);
+      const seenKey = `badge-shown:${currentUser.uid}:${INTERESTS_BADGE_ID}`;
+      // res may be null on first call; also OK if badge was already earned
+      const earned = (res?.gam?.badges && (res.gam.badges[INTERESTS_BADGE_ID] || false)) || false;
+      if (earned && !localStorage.getItem(seenKey)) {
+        toast.show({
+          title: `Badge unlocked: ${b?.label || "Dialed In"}`,
+          desc: b?.desc || "Saved your interests.",
+          icon: b?.icon || "🏷️",
+          duration: 4200
+        });
+        localStorage.setItem(seenKey, "1");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="container interests-page" style={{ padding: 16 }}>
@@ -49,7 +83,6 @@ export default function ProfileInterests() {
       ) : (
         <>
           <div style={{ marginTop: 12 }}>
-            {/* dark variant renders white-on-dark chips/inputs */}
             <InterestsSelector value={interests} onChange={setInterests} max={12} variant="dark" />
           </div>
 
@@ -57,22 +90,9 @@ export default function ProfileInterests() {
             <button
               type="button"
               disabled={saving}
-              onClick={async () => {
-                if (!currentUser?.uid) return;
-                setSaving(true);
-                try {
-                  await setUserInterests(currentUser.uid, interests);
-                  alert("Interests saved!");
-                } finally {
-                  setSaving(false);
-                }
-              }}
-              style={{
-                padding: "10px 14px",
-                borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.45)",
-                background: "rgba(255,255,255,0.08)"
-              }}
+              onClick={handleSave}
+              className="btn btn-sm btn-outline-light border"
+              style={{ padding: "10px 14px", borderRadius: 10 }}
             >
               {saving ? "Saving…" : "Save Interests"}
             </button>

@@ -1,9 +1,10 @@
 // src/pages/Home.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";          // 👈 added
 import { db } from "../firebase";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import "./Landing.css"; // create this file below
+import "./Landing.css";
 
 // keep only valid Firebase download URLs
 const cleanPhotos = (arr) =>
@@ -22,13 +23,21 @@ function shuffle(arr) {
 }
 
 export default function Home() {
+  const { currentUser } = useAuth() || {};                // 👈 added
   const [urls, setUrls] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load up to ~120 recent public images
+  // Load up to ~120 recent public images (only when signed in)
   useEffect(() => {
     let alive = true;
+
     (async () => {
+      // ✅ Do NOT call Firestore unless signed in
+      if (!currentUser?.uid) {
+        if (alive) setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const q = query(
@@ -45,23 +54,22 @@ export default function Home() {
         const valid = cleanPhotos(arr);
         if (alive) setUrls(shuffle(valid).slice(0, 120));
       } catch (e) {
+        // Gracefully handle permission-denied or any other error
         console.error(e);
-        if (alive) setUrls([]);
+        if (alive) setUrls([]); // fall back to gradient
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
-  }, []);
 
-  // If no images yet, show a gentle gradient
+    return () => { alive = false; };
+  }, [currentUser?.uid]);                                   // 👈 re-run after login
+
   const hasImages = useMemo(() => urls.length > 0, [urls]);
 
   return (
     <div className="landing-root">
-      {/* Blurred mosaic background */}
+      {/* Blurred mosaic background (only when we have URLs) */}
       {hasImages ? (
         <div className="mosaic" aria-hidden="true">
           {urls.map((u, i) => (
@@ -93,7 +101,7 @@ export default function Home() {
             Sign in
           </Link>
         </div>
-        {loading && (
+        {currentUser && loading && (
           <div className="small mt-3 opacity-75">Loading photos…</div>
         )}
       </div>

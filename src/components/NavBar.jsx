@@ -1,3 +1,4 @@
+// src/components/NavBar.jsx
 import React from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -20,12 +21,16 @@ export default function NavBar() {
   const auth = useAuth() || {};
   const user = auth.currentUser || auth.user || null;
 
+  // Public folder image path (works in CRA/Vite): "/logo.png"
+  const logoSrc = "/logo.png"; // file at public/logo.png
+
   return (
     <nav className="navbar navbar-expand-md navbar-light border-bottom">
       <div className="container">
-        {/* Brand */}
-        <Link className="navbar-brand brand-cursive" to="/">
-          Candle Love
+        {/* Brand (logo + text) */}
+        <Link className="navbar-brand brand-cursive d-flex align-items-center" to="/">
+          <img src={logoSrc} alt="Candle Love logo" />
+          <span>Candle Love</span>
         </Link>
 
         {/* Mobile toggler (opens offcanvas) */}
@@ -54,8 +59,6 @@ export default function NavBar() {
                   <li className="nav-item"><NavLink className="nav-link" to="/matches">Matches</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/chat">Chat</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/settings">Settings</NavLink></li>
-
-                  {/* Added links */}
                   <li className="nav-item"><NavLink className="nav-link" to="/discover">Discover</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/profile/interests">Interests</NavLink></li>
 
@@ -89,7 +92,10 @@ export default function NavBar() {
         {/* Mobile offcanvas */}
         <div className="offcanvas offcanvas-end d-md-none" tabIndex="-1" id="mnav" aria-labelledby="mnavLabel">
           <div className="offcanvas-header">
-            <h5 className="offcanvas-title brand-cursive" id="mnavLabel">Candle Love</h5>
+            <h5 className="offcanvas-title brand-cursive d-flex align-items-center" id="mnavLabel">
+              <img src={logoSrc} alt="" style={{ height: 28, marginRight: 8 }} />
+              Candle Love
+            </h5>
             <button type="button" className="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close" />
           </div>
 
@@ -105,8 +111,6 @@ export default function NavBar() {
                   <li className="nav-item"><NavLink className="nav-link" to="/matches" data-bs-dismiss="offcanvas">Matches</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/chat" data-bs-dismiss="offcanvas">Chat</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/settings" data-bs-dismiss="offcanvas">Settings</NavLink></li>
-
-                  {/* Added links */}
                   <li className="nav-item"><NavLink className="nav-link" to="/discover" data-bs-dismiss="offcanvas">Discover</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/profile/interests" data-bs-dismiss="offcanvas">Interests</NavLink></li>
 
