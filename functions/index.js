@@ -1,346 +1,189 @@
-/* eslint-disable */
-const functions = require("firebase-functions");
+// functions/index.js
+require("dotenv").config(); // loads .env locally/emulator
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
-const sgMail = require("@sendgrid/mail");
-const crypto = require("crypto");
+const sg = require("@sendgrid/mail");
 
-if (!admin.apps.length) admin.initializeApp();
+setGlobalOptions({ region: "us-central1", memory: "256MiB", concurrency: 10 });
+
+admin.initializeApp();
 const db = admin.firestore();
+const auth = admin.auth();
 
-/** ===== Brand config ===== */
-const BRAND = "Candle Love";
-const FROM_EMAIL = "infojr.83@gmail.com"; // must be verified in SendGrid
-const APP_URL = process.env.APP_URL || "https://thecandlelove.com";
-const LOGO_URL = process.env.LOGO_URL || "https://cupido-2025.netlify.app/logo.png";
+// --- SendGrid config ---
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || "";
+const FROM_EMAIL = process.env.FROM_EMAIL || "no-reply@yourdomain.com";
+const APP_PUBLIC_URL = process.env.APP_PUBLIC_URL || "https://yourapp.example.com";
+if (SENDGRID_API_KEY) sg.setApiKey(SENDGRID_API_KEY);
 
-/** ===== Secrets ===== */
-const { defineSecret } = functions.params;
-const SENDGRID_SECRET = defineSecret("SENDGRID_API_KEY");
-const ADMIN_SEED_TOKEN = defineSecret("ADMIN_SEED_TOKEN");
-
-function getSendgridKey() {
-  const envVal = process.env.SENDGRID_API_KEY;
-  const key = envVal || SENDGRID_SECRET.value();
-  if (!key) throw new Error("Missing SENDGRID_API_KEY");
-  return key;
+// ---------- Helpers ----------
+async function once(key) {
+  const ref = db.collection("notif_log").doc(key);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return false;
+    tx.set(ref, { createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    return true;
+  });
 }
 
-/** ===== CORS helper ===== */
-function corsWrap(handler) {
-  return async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    if (req.method === "OPTIONS") return res.status(204).end();
-    return handler(req, res);
+async function getUserDocWithEmail(uid) {
+  const ref = db.collection("users").doc(uid);
+  const snap = await ref.get();
+  const data = snap.exists ? snap.data() : {};
+  let email = data?.email || data?.contactEmail || null;
+  if (!email) {
+    try {
+      const u = await auth.getUser(uid);
+      email = u.email || null;
+    } catch (_) {}
+  }
+  return { uid, ...data, email };
+}
+
+function prefs(user) {
+  return {
+    email: user.email || null,
+    emailOptIn: user.emailOptIn !== false,  // default true
+    notifyOnLike: user.notifyOnLike !== false,
+    notifyOnMatch: user.notifyOnMatch !== false
   };
 }
 
-/** ===== Email Helpers ===== */
-function escapeHtml(s = "") {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+function canEmail(user, type) {
+  const p = prefs(user);
+  if (!SENDGRID_API_KEY || !p.emailOptIn || !p.email) return false;
+  if (type === "like")  return p.notifyOnLike;
+  if (type === "match") return p.notifyOnMatch;
+  return false;
 }
 
-function wrapHtml(title, bodyHtml) {
-  const logoImg = LOGO_URL
-    ? `<img src="${LOGO_URL}" alt="${escapeHtml(
-        BRAND
-      )} logo" style="height:48px;vertical-align:middle;margin-right:10px;border:none;outline:none;text-decoration:none;display:inline-block;" />`
-    : "";
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(
-    title
-  )}</title></head>
-<body style="margin:0;padding:0;background:#faf7f2;font-family:Arial,Helvetica,sans-serif;color:#1f1b16;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#faf7f2;padding:24px 0;">
-    <tr><td align="center">
-      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #f0e6da;">
-        <tr><td style="background:#1a0f07;background:linear-gradient(180deg,#1a0f07,#2a180c);padding:18px 24px;text-align:center;">
-          ${logoImg}
-          <span style="font-family:'Great Vibes','Brush Script MT','Segoe Script',cursive;font-size:28px;font-weight:700;color:#ff9e2c;text-shadow:0 0 6px rgba(216,122,18,0.5);vertical-align:middle;">${escapeHtml(
-            BRAND
-          )}</span>
-        </td></tr>
-        <tr><td style="padding:24px;font-size:16px;line-height:1.5;color:#1f1b16;">${bodyHtml}
-          <p style="margin-top:28px;font-size:13px;color:#6b635a;">You received this because you have a ${escapeHtml(
-            BRAND
-          )} account.</p>
-        </td></tr>
-        <tr><td style="background:#fff2e3;color:#4a3a2f;padding:14px 24px;font-size:12px;text-align:center;">© ${new Date().getFullYear()} ${escapeHtml(
-    BRAND
-  )} • <a href="${APP_URL}" style="color:#b8742c;text-decoration:none;">Open ${escapeHtml(
-    BRAND
-  )}</a></td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
+async function sendEmail(to, subject, html) {
+  if (!SENDGRID_API_KEY) return false;
+  await sg.send({ to, from: FROM_EMAIL, subject, html });
+  return true;
 }
 
-async function sendEmail(to, subject, html, key) {
-  sgMail.setApiKey(key);
-  await sgMail.send({
-    to,
-    from: { email: FROM_EMAIL, name: BRAND },
-    subject,
-    html,
-    replyTo: FROM_EMAIL,
-  });
+function likeTemplate({ likerName }) {
+  const url = `${APP_PUBLIC_URL}/matches`;
+  return {
+    subject: `Someone liked you on Candle Love 💛`,
+    html: `
+      <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:16px;color:#222">
+        <p style="font-size:18px"><strong>${likerName || "Someone"}</strong> liked you on <strong>Candle Love</strong>.</p>
+        <p>Open the app to see who and like them back.</p>
+        <p><a href="${url}" style="background:#ff9e2c;color:#1a0f07;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:700">View likes</a></p>
+        <p style="font-size:12px;color:#666">Manage your notifications in Settings.</p>
+      </div>`
+  };
 }
 
-/** ===== OTP helpers ===== */
-function code6() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+function matchTemplate({ otherName, otherUid }) {
+  const url = `${APP_PUBLIC_URL}/chat/with/${encodeURIComponent(otherUid || "")}`;
+  return {
+    subject: `It’s a match! Start chatting 💬`,
+    html: `
+      <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:16px;color:#222">
+        <p style="font-size:18px">You matched with <strong>${otherName || "someone"}</strong> on <strong>Candle Love</strong>!</p>
+        <p>Say hi and keep the spark going.</p>
+        <p><a href="${url}" style="background:#ff9e2c;color:#1a0f07;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:700">Open chat</a></p>
+        <p style="font-size:12px;color:#666">Manage your notifications in Settings.</p>
+      </div>`
+  };
 }
-function hash(s) {
-  return crypto.createHash("sha256").update(String(s)).digest("hex");
+
+// Extract uids from common like schemas
+function parseLike(docData, params) {
+  const toUid =
+    docData.toUid || docData.receiverUid || docData.likedUid || docData.to || params?.uid || null;
+  const fromUid =
+    docData.fromUid || docData.senderUid || docData.likerUid || docData.from || null;
+  return { toUid, fromUid };
 }
 
-/** === Functions === */
+// Extract from common match schemas
+function parseMatch(docData, params) {
+  let u1 = docData.u1 || docData.user1 || docData.a || null;
+  let u2 = docData.u2 || docData.user2 || docData.b || null;
+  if ((!u1 || !u2) && Array.isArray(docData.users) && docData.users.length >= 2) {
+    u1 = docData.users[0];
+    u2 = docData.users[1];
+  }
+  if ((!u1 || !u2) && params?.uid && (docData.otherUid || docData.withUid)) {
+    u1 = params.uid;
+    u2 = docData.otherUid || docData.withUid;
+  }
+  return { u1, u2 };
+}
 
-/** Welcome Email */
-exports.sendWelcomeEmail = functions
-  .runWith({ secrets: [SENDGRID_SECRET] })
-  .auth.user()
-  .onCreate(async (user) => {
-    try {
-      const key = getSendgridKey();
-      const subject = `Welcome to ${BRAND}!`;
-      const html = wrapHtml(
-        subject,
-        `<p>Hi ${escapeHtml(
-          user.displayName || "there"
-        )},</p><p>Thanks for joining <b>${BRAND}</b>! Start connecting today.</p>`
-      );
-      await sendEmail(user.email, subject, html, key);
-    } catch (e) {
-      console.error("sendWelcomeEmail:", e);
-    }
-  });
+// ---------- LIKE triggers ----------
+async function handleLikeEvent(event, sourceKey) {
+  if (!event?.data) return;
+  const doc = event.data.data();
+  const { toUid, fromUid } = parseLike(doc, event.params || {});
+  if (!toUid || !fromUid || toUid === fromUid) return;
 
-/** Like Notification */
-exports.onNewLike = functions
-  .runWith({ secrets: [SENDGRID_SECRET] })
-  .firestore.document("likes/{likeId}")
-  .onCreate(async (snap) => {
-    try {
-      const data = snap.data();
-      const toUid = data.to;
-      const fromUid = data.from;
+  // Robust de-dupe: use the path of the created doc
+  const path = event.data.ref?.path || `${sourceKey}/${Date.now()}`;
+  const dedupeKey = `like:${path}`;
+  if (!(await once(dedupeKey))) return;
 
-      const userDoc = await db.doc(`users/${toUid}`).get();
-      if (!userDoc.exists) return;
+  const [toUser, fromUser] = await Promise.all([
+    getUserDocWithEmail(toUid),
+    getUserDocWithEmail(fromUid)
+  ]);
 
-      const email = userDoc.data().email;
-      if (!email) return;
+  const likerName = fromUser?.displayName || fromUser?.name || "Someone";
 
-      const subject = `${BRAND}: Someone liked your photo`;
-      const html = wrapHtml(
-        subject,
-        `<p>You have a new like from <b>${fromUid}</b>. Log in to see who!</p>`
-      );
-      const key = getSendgridKey();
-      await sendEmail(email, subject, html, key);
-    } catch (e) {
-      console.error("onNewLike:", e);
-    }
-  });
+  if (canEmail(toUser, "like")) {
+    const { subject, html } = likeTemplate({ likerName });
+    await sendEmail(toUser.email, subject, html).catch(() => {});
+  }
+}
 
-/** Message Notification */
-exports.onNewMessage = functions
-  .runWith({ secrets: [SENDGRID_SECRET] })
-  .firestore.document("messages/{msgId}")
-  .onCreate(async (snap) => {
-    try {
-      const data = snap.data();
-      const toUid = data.to;
-      const fromUid = data.from;
-      const text = data.text || "";
-
-      const userDoc = await db.doc(`users/${toUid}`).get();
-      if (!userDoc.exists) return;
-
-      const email = userDoc.data().email;
-      if (!email) return;
-
-      const subject = `${BRAND}: New message from ${fromUid}`;
-      const html = wrapHtml(
-        subject,
-        `<p>You have a new message:</p><blockquote>${escapeHtml(
-          text
-        )}</blockquote>`
-      );
-      const key = getSendgridKey();
-      await sendEmail(email, subject, html, key);
-    } catch (e) {
-      console.error("onNewMessage:", e);
-    }
-  });
-
-/** OTP: send */
-exports.sendEduOtp = functions
-  .runWith({ secrets: [SENDGRID_SECRET] })
-  .https.onRequest(
-    corsWrap(async (req, res) => {
-      try {
-        const email = String(req.body?.email || "").trim().toLowerCase();
-        if (!email.endsWith(".edu"))
-          return res.json({ ok: false, error: "Valid .edu email required" });
-
-        const code = code6();
-        const ref = db.doc(`eduOtps/${email}`);
-        const expiresAt = Date.now() + 10 * 60 * 1000;
-        await ref.set({
-          codeHash: hash(code),
-          expiresAt,
-          createdAt: Date.now(),
-          attempts: 0,
-        });
-
-        let emailSent = false;
-        try {
-          const key = getSendgridKey();
-          const subject = `Your ${BRAND} verification code: ${code}`;
-          const html = wrapHtml(
-            subject,
-            `<p>Here is your verification code:</p>
-             <p style="font-size:24px;font-weight:700;letter-spacing:4px">${code}</p>
-             <p>This code expires in 10 minutes.</p>`
-          );
-          await sendEmail(email, subject, html, key);
-          emailSent = true;
-        } catch (e) {
-          console.error("sendEduOtp email:", e.message);
-        }
-
-        return res.json({
-          ok: true,
-          emailSent,
-          message: emailSent
-            ? "OTP sent. Check your inbox."
-            : "OTP created (email not sent; check Firestore).",
-        });
-      } catch (e) {
-        console.error("sendEduOtp:", e);
-        return res.status(500).json({ ok: false, error: "Server error" });
-      }
-    })
-  );
-
-/** OTP: verify */
-exports.verifyEduOtp = functions.https.onRequest(
-  corsWrap(async (req, res) => {
-    try {
-      const email = String(req.body?.email || "").trim().toLowerCase();
-      const code = String(req.body?.code || "").trim();
-      if (!email || !/^[0-9]{6}$/.test(code))
-        return res.json({ ok: false, error: "Email and 6-digit code required" });
-
-      const ref = db.doc(`eduOtps/${email}`);
-      const snap = await ref.get();
-      if (!snap.exists)
-        return res.json({ ok: false, error: "No code found." });
-
-      const data = snap.data() || {};
-      if (Date.now() > Number(data.expiresAt || 0))
-        return res.json({ ok: false, error: "Code expired." });
-      if (hash(code) !== data.codeHash)
-        return res.json({ ok: false, error: "Invalid code." });
-
-      await db.doc(`verifiedEduEmails/${email}`).set(
-        {
-          email,
-          type: "edu",
-          verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      await ref.delete();
-      return res.json({ ok: true });
-    } catch (e) {
-      console.error("verifyEduOtp:", e);
-      return res.status(500).json({ ok: false, error: "Server error" });
-    }
-  })
+exports.likeCreatedTop = onDocumentCreated("likes/{likeId}", async (event) =>
+  handleLikeEvent(event, "likes")
 );
 
-/** Tag .edu user onCreate */
-exports.tagCollegeOnCreate = functions.auth.user().onCreate(async (user) => {
-  try {
-    const email = (user && user.email || "").toLowerCase();
-    if (!email) return;
+exports.likeCreatedUserSub = onDocumentCreated("users/{uid}/likes/{likeId}", async (event) =>
+  handleLikeEvent(event, "usersLikes")
+);
 
-    const doc = await db.collection("verifiedEduEmails").doc(email).get();
-    if (!doc.exists) return;
+// ---------- MATCH triggers ----------
+async function notifyMatchFor(recipientUid, otherUid) {
+  const [recip, other] = await Promise.all([
+    getUserDocWithEmail(recipientUid),
+    getUserDocWithEmail(otherUid)
+  ]);
+  const otherName = other?.displayName || other?.name || "your match";
 
-    const domain = email.split("@")[1] || "";
-    await db.doc(`users/${user.uid}`).set(
-      {
-        verification: {
-          college: true,
-          collegeDomain: domain,
-          verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-      },
-      { merge: true }
-    );
-
-    await admin.auth().setCustomUserClaims(user.uid, {
-      eduVerified: true,
-      userType: "college",
-      eduDomain: domain,
-    });
-  } catch (e) {
-    console.error("tagCollegeOnCreate error:", e);
+  if (canEmail(recip, "match")) {
+    const { subject, html } = matchTemplate({ otherName, otherUid });
+    await sendEmail(recip.email, subject, html).catch(() => {});
   }
-});
+}
 
-/** Admin seeding */
-exports.seedInitialAdmin = functions
-  .runWith({ secrets: [ADMIN_SEED_TOKEN] })
-  .https.onRequest(async (req, res) => {
-    if (req.method === "OPTIONS") return res.status(204).end();
-    if (req.method !== "POST")
-      return res.status(405).json({ error: "Use POST" });
+async function handleMatchEvent(event, sourceKey) {
+  if (!event?.data) return;
+  const doc = event.data.data();
+  const { u1, u2 } = parseMatch(doc, event.params || {});
+  if (!u1 || !u2 || u1 === u2) return;
 
-    try {
-      const body = req.body || {};
-      const token = String(body.token || "");
-      const email = String(body.email || "infojr.83@gmail.com").toLowerCase();
+  const path = event.data.ref?.path || `${sourceKey}/${Date.now()}`;
+  const dedupeKey = `match:${path}`;
+  if (!(await once(dedupeKey))) return;
 
-      const secret = ADMIN_SEED_TOKEN.value();
-      if (!secret)
-        return res.status(500).json({ ok: false, error: "Missing ADMIN_SEED_TOKEN" });
-      if (token !== secret)
-        return res.status(403).json({ ok: false, error: "Bad token" });
+  await Promise.all([
+    notifyMatchFor(u1, u2),
+    notifyMatchFor(u2, u1)
+  ]);
+}
 
-      let userRecord;
-      try {
-        userRecord = await admin.auth().getUserByEmail(email);
-      } catch (e) {
-        return res.status(400).json({ ok: false, error: "User does not exist in Auth" });
-      }
+exports.matchCreatedTop = onDocumentCreated("matches/{matchId}", async (event) =>
+  handleMatchEvent(event, "matches")
+);
 
-      const prev = userRecord.customClaims || {};
-      await admin.auth().setCustomUserClaims(userRecord.uid, {
-        ...prev,
-        admin: true,
-      });
-
-      await db.doc(`users/${userRecord.uid}`).set(
-        {
-          roles: { admin: true },
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      return res.status(200).json({ ok: true, email, uid: userRecord.uid, admin: true });
-    } catch (err) {
-      console.error("seedInitialAdmin:", err);
-      return res.status(500).json({ ok: false, error: String(err.message || err) });
-    }
-  });
+exports.matchCreatedUserSub = onDocumentCreated("users/{uid}/matches/{matchId}", async (event) =>
+  handleMatchEvent(event, "usersMatches")
+);
