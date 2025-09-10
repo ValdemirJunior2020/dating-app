@@ -1,106 +1,114 @@
 // src/components/UserCard.jsx
-import React, { useState } from "react";
-import Lightbox from "./Lightbox";
+import React from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { sendLike } from "../services/likes"; // ✅ use sendLike instead of likeUser
 
-const cleanPhotos = (arr) =>
-  (Array.isArray(arr) ? arr : []).filter(
-    (u) => typeof u === "string" && (u.startsWith("http://") || u.startsWith("https://"))
-  );
+export default function UserCard({ user, onEnlarge }) {
+  const auth = useAuth();
+  const me = auth.currentUser || auth.user || {};
+  const uid = me?.uid;
 
-export default function UserCard({ user, onLike }) {
-  const photos = cleanPhotos(user.photos);
-  const primary = photos[0] || user.photoURL || null;
-  const [open, setOpen] = useState(false);
-  const [start, setStart] = useState(0);
+  const photo =
+    Array.isArray(user?.photos) && user.photos.length > 0
+      ? user.photos[0]
+      : user?.photoURL || null;
+
+  async function handleLike() {
+    try {
+      await sendLike(uid, user.id); // ✅ correct function
+      alert(`You liked ${user.displayName || "this user"}!`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to like.");
+    }
+  }
 
   return (
-    <div className="card shadow-sm" style={{ backgroundColor: "var(--brown-800)", border: "none", borderRadius: 16 }}>
-      {/* Photo area — rounded + click to zoom */}
+    <div
+      className="card shadow-sm p-3"
+      style={{
+        width: 250,
+        borderRadius: 18,
+        background: "rgba(0,0,0,.25)",
+        border: "1px solid rgba(255,255,255,.15)",
+        textAlign: "center",
+        color: "#fff",
+      }}
+    >
+      {/* photo */}
       <div
         style={{
-          position: "relative",
-          cursor: primary ? "zoom-in" : "default",
-          borderRadius: 16,
+          width: 160,
+          height: 160,
+          borderRadius: "50%",
           overflow: "hidden",
+          margin: "0 auto 12px",
+          border: "3px solid rgba(255,255,255,.6)",
+          background: "#1b1b1b",
+          cursor: photo ? "zoom-in" : "default",
         }}
-        onClick={() => { if (primary) { setStart(0); setOpen(true); } }}
+        onClick={() => photo && onEnlarge(photo)}
       >
-        {primary ? (
+        {photo ? (
           <img
-            src={primary}
-            alt={user.name}
-            className="card-img-top"
-            style={{ objectFit: "cover", height: "200px" }}   // smaller & neat
+            src={photo}
+            alt={user.displayName || "profile"}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         ) : (
-          <div
-            className="d-flex align-items-center justify-content-center"
-            style={{ height: "200px", background: "var(--brown-900)", color: "var(--text-light)" }}
-          >
-            No Photo
+          <div className="text-white-50 d-flex align-items-center justify-content-center h-100">
+            No photo
           </div>
         )}
+      </div>
 
-        {/* Small rounded thumbnails (also zoom) */}
-        {photos.length > 1 && (
-          <div className="position-absolute bottom-0 start-0 end-0 p-2 d-flex gap-1 justify-content-center">
-            {photos.slice(0, 5).map((u, idx) => (
-              <img
-                key={u}
-                src={u}
-                alt=""
-                onClick={(e) => { e.stopPropagation(); setStart(idx); setOpen(true); }}
+      {/* name + age */}
+      <h5 className="mb-1">{user.displayName || user.name || "Someone"}</h5>
+      {user.age && <div className="text-white-50 fw-bold">{user.age}</div>}
+
+      {/* interests preview */}
+      <div className="mt-2">
+        {(user.interests && user.interests.length > 0) ? (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              justifyContent: "center",
+            }}
+          >
+            {user.interests.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="badge rounded-pill"
                 style={{
-                  width: 48,
-                  height: 48,
-                  objectFit: "cover",
-                  borderRadius: 10,                     // more rounded
-                  border: "2px solid #fff",
-                  cursor: "zoom-in",
+                  background: "#dff3ff",
+                  color: "#153e52",
+                  fontWeight: 700,
                 }}
-              />
+              >
+                {tag}
+              </span>
             ))}
           </div>
+        ) : (
+          <div className="text-white-50">No interests yet</div>
         )}
       </div>
 
-      <div className="card-body">
-        {/* Name in Candle Love cursive/amber */}
-        <h5 className="mb-1 brand-cursive">
-          {user.name} {user.age ? `• ${user.age}` : ""}
-        </h5>
-
-        {/* Location in light text */}
-        <p className="mb-3" style={{ color: "var(--text-light)" }}>
-          {user.city || user.school || ""}
-        </p>
-
-        {/* Bio trimmed */}
-        {user.bio && (
-          <p className="mb-3" style={{ color: "var(--text-light)" }}>
-            {String(user.bio).length > 140 ? String(user.bio).slice(0, 137) + "…" : user.bio}
-          </p>
-        )}
-
-        {/* CTA row */}
-        <div className="d-flex gap-2">
-          {user.matched ? (
-            <Link className="btn btn-primary btn-sm" to={`/chat/${user.matchId}`}>
-              Open Chat
-            </Link>
-          ) : (
-            <button className="btn btn-success btn-sm" onClick={() => onLike(user.uid)}>
-              ❤️ Like
-            </button>
-          )}
-          <Link className="btn btn-outline-light btn-sm" to={`/profile/${user.uid}`}>
-            View Profile
-          </Link>
-        </div>
+      {/* actions */}
+      <div className="d-flex justify-content-center gap-2 mt-3">
+        <button className="btn btn-sm btn-outline-light" onClick={handleLike}>
+          ❤️ Like
+        </button>
+        <Link to={`/chat/with/${user.id}`} className="btn btn-sm btn-primary">
+          💬 Chat
+        </Link>
+        <Link to={`/u/${user.id}`} className="btn btn-sm btn-secondary">
+          👤 Profile
+        </Link>
       </div>
-
-      {open && <Lightbox photos={photos.length ? photos : [primary].filter(Boolean)} start={start} onClose={() => setOpen(false)} />}
     </div>
   );
 }

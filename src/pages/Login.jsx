@@ -1,8 +1,9 @@
 // src/pages/Login.jsx
-import React from "react";
+import React, { useState } from "react";
 import { useLocation, Navigate, Link, useNavigate } from "react-router-dom";
-import { signInWithGoogle } from "../firebase";
+import { signInWithGoogle, auth } from "../firebase";
 import { useAuth } from "../context/AuthContext";
+import { sendEmailVerification } from "firebase/auth";
 import BrandName from "../components/BrandName"; // cursive "Candle Love"
 
 const friendly = (code) => {
@@ -23,11 +24,13 @@ export default function Login() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
   // allow viewing this page while signed in if ?force=1
   const params = new URLSearchParams(location.search);
   const force = params.get("force") === "1";
 
-  // safer fallback: if you really want /onboarding keep it; otherwise /browse avoids blanks
   const from = location.state?.from?.pathname || "/browse";
 
   if (user && !force) return <Navigate to={from} replace />;
@@ -45,8 +48,28 @@ export default function Login() {
     navigate("/login-email", { state: { from: { pathname: from } } });
   }
 
+  async function resendVerification() {
+    setMsg(""); setErr("");
+    try {
+      if (!auth.currentUser) {
+        setErr("You must log in with email/password first.");
+        return;
+      }
+      if (auth.currentUser.emailVerified) {
+        setMsg("Your email is already verified.");
+        return;
+      }
+      await sendEmailVerification(auth.currentUser, {
+        url: "https://yourapp.web.app/login"
+      });
+      setMsg("Verification email sent! Check your inbox.");
+    } catch (e) {
+      console.error(e);
+      setErr(e.message || "Failed to send verification email.");
+    }
+  }
+
   return (
-    // Uses .auth-page and .auth-card classes in global.css
     <main className="auth-page">
       <div className="container bg-transparent">
         <div className="card shadow-sm p-4 auth-card mx-auto" style={{ maxWidth: 520 }}>
@@ -80,6 +103,19 @@ export default function Login() {
               <Link to="/reset">Forgot password?</Link>
             </small>
           </div>
+
+          <div className="text-center mt-3">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-light"
+              onClick={resendVerification}
+            >
+              Resend verification email
+            </button>
+          </div>
+
+          {msg && <div className="alert alert-success mt-3">{msg}</div>}
+          {err && <div className="alert alert-danger mt-3">{err}</div>}
         </div>
       </div>
     </main>

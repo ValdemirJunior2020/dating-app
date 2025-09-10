@@ -1,102 +1,170 @@
 // src/pages/Browse.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import { db } from "../firebase";
-import { Link } from "react-router-dom";
-import ZoomableAvatar from "../components/ZoomableAvatar";
-import Lightbox from "../components/Lightbox";
-import cleanPhotos from "../utils/cleanPhotos";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { fetchVisibleUsers } from "../services/users";
+import { sendLike } from "../services/likes";
+import { useToast } from "../components/Toaster";
 
-export default function Browse() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerImages, setViewerImages] = useState([]);
+const PLACEHOLDER = "/logo.png";
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        // 🔁 No 'visible == true' for now so existing users show up again
-        const q = query(
-          collection(db, "users"),
-          orderBy("updatedAt", "desc"),
-          limit(48)
-        );
-        const snap = await getDocs(q);
-        if (!active) return;
-        setRows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      } catch (e) {
-        console.error("Browse load:", e);
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+function primaryPhoto(user) {
+  const photos = Array.isArray(user?.photos) ? user.photos : [];
+  const first = photos.find((u) => typeof u === "string" && u.length > 6);
+  return first || (typeof user?.photoURL === "string" ? user.photoURL : null);
+}
 
-  const cards = useMemo(() => {
-    return rows.map((u) => {
-      const photos = cleanPhotos(u.photos || []);
-      const urls = photos
-        .map((p) => (typeof p === "string" ? p : p?.url))
-        .filter(Boolean);
-      const primary = urls[0] || "/logo.png"; // fallback; put any image at public/logo.png
-      const name = u.displayName || u.name || "Someone";
+function Card({ meUid, user }) {
+  const nav = useNavigate();
+  const toast = useToast();
+  const [liking, setLiking] = useState(false);
 
-      // broad check for your edu flag
-      const verified =
-        !!(u?.verification?.college ||
-           u?.eduVerified ||
-           u?.isCollege ||
-           u?.collegeVerified ||
-           u?.type === "edu" ||
-           (Array.isArray(u?.badges) && u.badges.includes("edu")));
+  const url = primaryPhoto(user);
+  const hasPhoto = !!url;
 
-      return { id: u.uid || u.id, name, primary, urls, verified };
-    });
-  }, [rows]);
+  async function onLike() {
+    if (!meUid || !user?.id) return;
+    try {
+      setLiking(true);
+      await sendLike(meUid, user.id);
+      toast?.show
+        ? toast.show({ title: "Liked", desc: `You liked ${user.displayName || "this user"}.`, icon: "❤️" })
+        : alert("Liked!");
+    } catch (e) {
+      console.error(e);
+      toast?.show
+        ? toast.show({ title: "Like failed", desc: String(e?.message || e), icon: "⚠️" })
+        : alert("Like failed");
+    } finally {
+      setLiking(false);
+    }
+  }
 
-  const openViewer = (images) => {
-    setViewerImages(images.length ? images : ["/logo.png"]);
-    setViewerOpen(true);
-  };
-
-  if (loading) return <div className="container py-5">Loading…</div>;
+  function onSayHi() {
+    nav(`/chat/with/${user.id}`);
+  }
 
   return (
-    <div className="container py-4">
-      <h2 className="mb-3">Browse</h2>
+    <div
+      className="card shadow-sm p-3"
+      style={{
+        borderRadius: 18,
+        background: "rgba(0,0,0,.25)",
+        border: "1px solid rgba(255,255,255,.15)",
+        textAlign: "center",
+        color: "#fff",
+      }}
+    >
+      {/* circular photo */}
+      <div
+        style={{
+          width: 170,
+          height: 170,
+          borderRadius: "50%",
+          overflow: "hidden",
+          margin: "0 auto 12px",
+          border: "4px solid rgba(255,255,255,.7)",
+          background: "#1b1b1b",
+          boxShadow: "0 10px 28px rgba(0,0,0,.35)",
+          cursor: hasPhoto ? "zoom-in" : "default",
+        }}
+        onClick={() => {
+          if (!hasPhoto) return;
+          // your ImageLightbox binds to [data-enlarge]
+          const img = document.createElement("img");
+          img.setAttribute("data-enlarge", url);
+          document.body.appendChild(img);
+          img.click();
+          img.remove();
+        }}
+      >
+        <img
+          src={hasPhoto ? url : PLACEHOLDER}
+          alt={user.displayName || user.name || "profile"}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          data-enlarge={hasPhoto ? url : undefined}
+        />
+      </div>
+
+      {/* name */}
+      <div className="fw-bold mb-2" style={{ fontSize: 18 }}>
+        {user.displayName || user.name || "Someone"}
+      </div>
+
+      {/* actions: ❤️ Like  |  Say hi  |  View profile */}
+      <div className="d-flex justify-content-center gap-2">
+        <button
+          className="btn btn-sm btn-danger fw-bold"
+          onClick={onLike}
+          disabled={liking}
+          aria-label="Like"
+        >
+          {liking ? "…" : "❤️ Like"}
+        </button>
+
+        <button
+          className="btn btn-sm btn-warning fw-bold"
+          onClick={onSayHi}
+          aria-label="Say hi"
+        >
+          Say hi
+        </button>
+
+        <Link
+          to={`/u/${user.id}`}
+          className="btn btn-sm btn-outline-light fw-bold"
+          aria-label="View profile"
+        >
+          View profile
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export default function Browse() {
+  const auth = useAuth() || {};
+  const meUid = auth.currentUser?.uid || auth.user?.uid || null;
+
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const list = await fetchVisibleUsers();
+        const filtered = meUid ? list.filter((u) => u.id !== meUid) : list;
+        if (alive) setUsers(filtered);
+      } catch (e) {
+        console.error(e);
+        if (alive) setUsers([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [meUid]);
+
+  const empty = useMemo(() => !loading && users.length === 0, [loading, users]);
+
+  return (
+    <div className="container" style={{ padding: 16 }}>
+      <h3 className="text-white fw-bold mb-3">Browse</h3>
+
+      {loading && <div className="text-white-50">Loading…</div>}
+      {empty && <div className="text-white-50">No profiles to show yet.</div>}
 
       <div className="row g-4">
-        {cards.map((u) => (
-          <div key={u.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-            <div className="card shadow-sm h-100">
-              <div className="card-body d-flex flex-column align-items-center">
-                <ZoomableAvatar
-                  src={u.primary}
-                  size={160}
-                  verified={u.verified}
-                  onClick={() => openViewer(u.urls)}
-                />
-                <div className="text-center mt-3 w-100">
-                  <div className="fw-semibold">{u.name}</div>
-                  <div className="d-flex justify-content-center gap-2 mt-2">
-                    <Link className="btn btn-warning btn-sm" to={`/chat/with/${u.id}`}>Say hi</Link>
-                    <Link className="btn btn-outline-secondary btn-sm" to={`/u/${u.id}`}>View profile</Link>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {users.map((u) => (
+          <div className="col-12 col-sm-6 col-lg-3" key={u.id}>
+            <Card meUid={meUid} user={u} />
           </div>
         ))}
       </div>
-
-      <Lightbox
-        open={viewerOpen}
-        images={viewerImages}
-        onClose={() => setViewerOpen(false)}
-      />
     </div>
   );
 }

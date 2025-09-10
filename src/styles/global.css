@@ -1,5 +1,8 @@
 
 /* === Auth Page Styling === */
+/* src/index.css (or your global css) */
+@import "react-phone-input-2/lib/style.css";
+
 .auth-page {
   background: #522703 !important; /* solid chocolate brown */
   min-height: 100vh;

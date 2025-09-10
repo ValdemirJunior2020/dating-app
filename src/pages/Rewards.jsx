@@ -1,66 +1,62 @@
-// src/pages/Rewards.jsx
-import React from "react";
-import { useAuth } from "../context/AuthContext";
-import { BADGES, getGamification } from "../services/gamification";
-import BadgeCard from "../components/BadgeCard";
+// src/pages/ResetPassword.jsx
+import React, { useState } from "react";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "../firebase";
+import { Link } from "react-router-dom";
 
-export default function Rewards() {
-  const { currentUser } = useAuth() || {};
-  const [gam, setGam] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
+export default function ResetPassword() {
+  const [email, setEmail] = useState("");
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      if (!currentUser?.uid) { setLoading(false); return; }
-      const data = await getGamification(currentUser.uid);
-      if (alive) { setGam(data || {}); setLoading(false); }
-    })();
-    return () => { alive = false; };
-  }, [currentUser?.uid]);
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setMsg(""); setErr("");
 
-  const badges = gam?.badges || {};
-  const streakCurrent = gam?.streakCurrent || 0;
-  const streakLongest = gam?.streakLongest || 0;
+    if (!email.trim()) {
+      setErr("Email is required.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      await sendPasswordResetEmail(auth, email.trim(), {
+        url: "https://yourapp.web.app/login", // where user will return after reset
+      });
+      setMsg("Password reset email sent. Check your inbox!");
+    } catch (e2) {
+      console.error(e2);
+      setErr(e2?.message || "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="container rewards-page" style={{ padding: 16, display: "grid", gap: 16 }}>
-      <style>{`
-        .rewards-page, .rewards-page * { color: #fff !important; font-weight: 700 !important; }
-      `}</style>
+    <div className="container text-center" style={{ maxWidth: 480, marginTop: 50 }}>
+      <h2 className="mb-4 text-white">Reset Password</h2>
 
-      <h2 style={{ margin: 0 }}>Your Progress</h2>
+      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
+        <input
+          type="email"
+          className="form-control"
+          placeholder="Enter your account email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <button className="btn btn-primary" type="submit" disabled={busy}>
+          {busy ? "Sending…" : "Send reset email"}
+        </button>
+      </form>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div className="card" style={{
-          padding: 16, borderRadius: 12,
-          background: "rgba(0,0,0,0.25)",
-          border: "1px solid rgba(255,255,255,0.35)"
-        }}>
-          <div style={{ fontSize: 14, opacity: 0.9 }}>Current Streak</div>
-          <div style={{ fontSize: 32 }}>{streakCurrent} day{streakCurrent === 1 ? "" : "s"}</div>
-        </div>
+      {msg && <div className="alert alert-success mt-3">{msg}</div>}
+      {err && <div className="alert alert-danger mt-3">{err}</div>}
 
-        <div className="card" style={{
-          padding: 16, borderRadius: 12,
-          background: "rgba(0,0,0,0.25)",
-          border: "1px solid rgba(255,255,255,0.35)"
-        }}>
-          <div style={{ fontSize: 14, opacity: 0.9 }}>Longest Streak</div>
-          <div style={{ fontSize: 32 }}>{streakLongest} day{streakLongest === 1 ? "" : "s"}</div>
-        </div>
+      <div className="mt-3">
+        <Link to="/login" className="btn btn-outline-light">Back to Login</Link>
       </div>
-
-      <h3 style={{ margin: "8px 0 0 0" }}>Badges</h3>
-      {loading ? (
-        <div>Loading…</div>
-      ) : (
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
-          {BADGES.map(b => (
-            <BadgeCard key={b.id} icon={b.icon} label={b.label} desc={b.desc} earned={!!badges[b.id]} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

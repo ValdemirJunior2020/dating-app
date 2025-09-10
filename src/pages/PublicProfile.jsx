@@ -1,123 +1,146 @@
+// src/pages/PublicProfile.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
-import cleanPhotos from "../utils/cleanPhotos";
-import VerifiedBadge from "../components/VerifiedBadge";
-import "../styles/profile.css";
 
-// helper: pick the first available field from a list
-const pick = (obj, candidates) =>
-  candidates.map((k) => obj?.[k]).find((v) => v && String(v).trim() !== "") || "";
+function firstPhotoFrom(user) {
+  const photos = Array.isArray(user?.photos) ? user.photos : [];
+  const first = photos.find((p) => typeof p === "string" && p);
+  return first || user?.photoURL || null;
+}
 
-const Labeled = ({ label, value }) => (
-  <div className="col-md-6">
-    <div className="pp-label">{label}</div>
-    <div className="pp-value">{value || "—"}</div>
-  </div>
-);
+// 🔒 Robust: array | comma-string | object map -> string[]
+function normalizeInterests(x) {
+  if (Array.isArray(x)) {
+    return x.map(String).map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof x === "string") {
+    return x
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (x && typeof x === "object") {
+    return Object.keys(x).filter((k) => Boolean(x[k]));
+  }
+  return [];
+}
 
 export default function PublicProfile() {
   const { uid } = useParams();
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // Realtime so profile updates immediately after edits
   useEffect(() => {
     if (!uid) return;
-    (async () => {
-      const snap = await getDoc(doc(db, "users", uid));
-      if (snap.exists()) setUser({ id: snap.id, ...snap.data() });
-    })();
+    const ref = doc(db, "users", uid);
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        setUser(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+    return () => unsub();
   }, [uid]);
 
-  const photos = useMemo(() => cleanPhotos(user?.photos || []), [user?.photos]);
-  const avatar = photos[0] || "/logo192.png";
+  const photo = useMemo(() => firstPhotoFrom(user), [user]);
+  const tags = useMemo(() => normalizeInterests(user?.interests), [user]);
 
-  const openLightbox = (index) => {
-    if (window.__openLightbox) window.__openLightbox(photos, index);
-    else window.open(photos[index], "_blank", "noopener,noreferrer");
-  };
-
-  if (!user) return <div className="container py-5 text-white">Loading…</div>;
-
-  // only safe, display-oriented fields
-  const displayName = pick(user, ["displayName", "name"]);
-  const pronouns    = pick(user, ["pronouns"]);
-  const major       = pick(user, ["major", "study"]);
-  const classYear   = pick(user, ["classYear", "gradYear"]);
-  const city        = pick(user, ["city", "location"]);
-  const school      = pick(user, ["school", "college"]);
-  const bio         = pick(user, ["about", "bio"]);
-  const interests   = Array.isArray(user?.interests) ? user.interests : [];
+  if (loading) {
+    return (
+      <div className="container text-white" style={{ padding: 16 }}>
+        Loading…
+      </div>
+    );
+  }
+  if (!user) {
+    return (
+      <div className="container text-white" style={{ padding: 16 }}>
+        User not found.
+      </div>
+    );
+  }
 
   return (
-    <div className="container py-4 public-profile">
-      {/* Header */}
-      <div className="pp-card glass mb-4">
-        <div className="d-flex align-items-center gap-3 flex-wrap">
-          <img src={avatar} alt="" className="pp-avatar" />
-          <div className="flex-grow-1">
-            <div className="d-flex align-items-center gap-2 flex-wrap">
-              <h1 className="pp-name m-0">{displayName || "Unknown"}</h1>
-              {user?.verifiedEdu && <VerifiedBadge />}
-            </div>
-            {(city || school) && (
-              <div className="pp-subtle mt-1">
-                {[city, school].filter(Boolean).join(" • ")}
+    <div className="container" style={{ padding: 16, maxWidth: 720 }}>
+      <div
+        className="card p-3"
+        style={{
+          background: "rgba(0,0,0,.25)",
+          borderRadius: 18,
+          border: "1px solid rgba(255,255,255,.3)",
+        }}
+      >
+        <div className="d-flex align-items-center gap-3">
+          {/* Circular avatar + enlarge */}
+          <div
+            style={{
+              width: 120,
+              height: 120,
+              borderRadius: "50%",
+              overflow: "hidden",
+              flex: "0 0 auto",
+              border: "3px solid rgba(255,255,255,.6)",
+              background: "#1b1b1b",
+            }}
+          >
+            {photo ? (
+              <img
+                src={photo}
+                alt={user.displayName || "profile"}
+                data-enlarge
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  cursor: "zoom-in",
+                }}
+              />
+            ) : (
+              <div className="text-white-50 d-flex align-items-center justify-content-center h-100">
+                No photo
               </div>
             )}
           </div>
-          <Link to={`/chat/with/${uid}`} className="btn btn-warning ms-auto">
-            Say hi
-          </Link>
-        </div>
-      </div>
 
-      {/* Details */}
-      <div className="pp-card glass mb-4">
-        <div className="row g-4">
-          <Labeled label="Pronouns"     value={pronouns} />
-          <Labeled label="Major"        value={major} />
-          <Labeled label="Class (year)" value={classYear} />
-          <Labeled label="City"         value={city} />
-          <Labeled label="School"       value={school} />
-
-          <div className="col-12">
-            <div className="pp-label">Bio</div>
-            <div className="pp-value">{bio || "—"}</div>
-          </div>
-
-          {interests.length > 0 && (
-            <div className="col-12">
-              <div className="pp-label">Interests</div>
-              <div className="d-flex flex-wrap gap-2">
-                {interests.map((t, i) => (
-                  <span key={i} className="badge bg-warning text-dark">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Photos */}
-      {photos.length > 0 && (
-        <div className="pp-card glass">
-          <div className="pp-label mb-2">Photos</div>
-          <div className="pp-grid">
-            {photos.map((u, i) => (
-              <button
-                key={u + i}
-                className="pp-photo"
-                style={{ backgroundImage: `url(${u})` }}
-                onClick={() => openLightbox(i)}
-                aria-label={`Open photo ${i + 1}`}
-              />
-            ))}
+          <div>
+            <h3 className="text-white mb-1">
+              {user.displayName || user.name || "Someone"}
+            </h3>
+            {user.age && (
+              <div className="text-white-50 fw-bold">{user.age}</div>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Interests */}
+        <div className="mt-3">
+          <div className="text-white-50 fw-bold mb-2">Interests</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {tags.length ? (
+              tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="badge rounded-pill"
+                  style={{
+                    background: "#dff3ff",
+                    color: "#153e52",
+                    fontWeight: 800,
+                  }}
+                >
+                  {tag}
+                </span>
+              ))
+            ) : (
+              <span className="text-white-50">No interests yet</span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
