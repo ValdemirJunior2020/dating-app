@@ -5,6 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import { fetchVisibleUsers } from "../services/users";
 import { sendLike } from "../services/likes";
 import { useToast } from "../components/Toaster";
+import useUnreadByPeer from "../hooks/useUnreadByPeer";
+import UnreadDot from "../components/UnreadDot";
 
 const PLACEHOLDER = "/logo.png";
 
@@ -14,7 +16,7 @@ function primaryPhoto(user) {
   return first || (typeof user?.photoURL === "string" ? user.photoURL : null);
 }
 
-function Card({ meUid, user }) {
+function Card({ meUid, user, hasUnread }) {
   const nav = useNavigate();
   const toast = useToast();
   const [liking, setLiking] = useState(false);
@@ -44,6 +46,15 @@ function Card({ meUid, user }) {
     nav(`/chat/with/${user.id}`);
   }
 
+  function enlarge() {
+    if (!hasPhoto) return;
+    const img = document.createElement("img");
+    img.setAttribute("data-enlarge", url); // your ImageLightbox listens for this
+    document.body.appendChild(img);
+    img.click();
+    img.remove();
+  }
+
   return (
     <div
       className="card shadow-sm p-3"
@@ -55,7 +66,7 @@ function Card({ meUid, user }) {
         color: "#fff",
       }}
     >
-      {/* circular photo */}
+      {/* circular photo with unread dot */}
       <div
         style={{
           width: 170,
@@ -67,16 +78,9 @@ function Card({ meUid, user }) {
           background: "#1b1b1b",
           boxShadow: "0 10px 28px rgba(0,0,0,.35)",
           cursor: hasPhoto ? "zoom-in" : "default",
+          position: "relative",
         }}
-        onClick={() => {
-          if (!hasPhoto) return;
-          // your ImageLightbox binds to [data-enlarge]
-          const img = document.createElement("img");
-          img.setAttribute("data-enlarge", url);
-          document.body.appendChild(img);
-          img.click();
-          img.remove();
-        }}
+        onClick={enlarge}
       >
         <img
           src={hasPhoto ? url : PLACEHOLDER}
@@ -84,6 +88,7 @@ function Card({ meUid, user }) {
           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           data-enlarge={hasPhoto ? url : undefined}
         />
+        <UnreadDot show={!!hasUnread} />
       </div>
 
       {/* name */}
@@ -125,6 +130,7 @@ function Card({ meUid, user }) {
 export default function Browse() {
   const auth = useAuth() || {};
   const meUid = auth.currentUser?.uid || auth.user?.uid || null;
+  const unreadByPeer = useUnreadByPeer(meUid); // ← Set<otherUid>
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +167,7 @@ export default function Browse() {
       <div className="row g-4">
         {users.map((u) => (
           <div className="col-12 col-sm-6 col-lg-3" key={u.id}>
-            <Card meUid={meUid} user={u} />
+            <Card meUid={meUid} user={u} hasUnread={unreadByPeer.has(u.id)} />
           </div>
         ))}
       </div>

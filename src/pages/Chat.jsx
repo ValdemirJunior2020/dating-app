@@ -1,178 +1,148 @@
-// src/pages/Chat.js
+// src/pages/Chat.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getAuth } from "firebase/auth";
-import {
-  addDoc, collection, doc, getDoc, onSnapshot, orderBy, query, serverTimestamp, limit,
-} from "firebase/firestore";
+import { useParams } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import ZoomableAvatar from "../components/ZoomableAvatar";
+import { useAuth } from "../context/AuthContext";
+import { ensureThread, listenMessages, sendMessage, markThreadRead } from "../services/chat";
 
-function stableMatchId(a, b) {
-  a = String(a || "");
-  b = String(b || "");
-  return a < b ? `${a}_${b}` : `${b}_${a}`;
+function bubbleSide(me, msg) {
+  return msg.from === me ? "end" : "start";
 }
 
 export default function Chat() {
-  const { matchId: matchIdParam, otherUid: otherUidParam } = useParams();
-  const auth = getAuth();
-  const me = auth.currentUser;
+  const { matchId, otherUid } = useParams();
+  const auth = useAuth() || {};
+  const me = auth.currentUser || auth.user || null;
+  const myUid = me?.uid || null;
 
-  const [matchId, setMatchId] = useState("");
-  const [otherUid, setOtherUid] = useState("");
-  const [otherUser, setOtherUser] = useState(null);
+  const [peerUid, setPeerUid] = useState(otherUid || null);
+  const [threadId, setThreadId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const endRef = useRef(null);
 
+  // Resolve peer from match doc if needed
   useEffect(() => {
-    if (!me) return;
-    if (matchIdParam) {
-      const [a, b] = String(matchIdParam).split("_");
-      const guessOther = a === me.uid ? b : b === me.uid ? a : "";
-      setMatchId(matchIdParam);
-      setOtherUid(guessOther);
-    } else if (otherUidParam) {
-      const mid = stableMatchId(me.uid, otherUidParam);
-      setMatchId(mid);
-      setOtherUid(otherUidParam);
-    } else {
-      setMatchId("");
-      setOtherUid("");
-    }
-  }, [me, matchIdParam, otherUidParam]);
-
-  useEffect(() => {
-    if (!otherUid) {
-      setOtherUser(null);
-      return;
-    }
-    let cancelled = false;
+    let alive = true;
     (async () => {
+      if (peerUid || !matchId || !myUid) return;
       try {
-        const snap = await getDoc(doc(db, "users", otherUid));
-        if (!cancelled) setOtherUser(snap.exists() ? { id: otherUid, ...snap.data() } : null);
+        const mRef = doc(db, "matches", matchId);
+        const mSnap = await getDoc(mRef);
+        if (mSnap.exists()) {
+          const data = mSnap.data() || {};
+          const other =
+            (Array.isArray(data.users) && data.users.find((u) => u !== myUid)) ||
+            (data.u1 && data.u2 && (data.u1 === myUid ? data.u2 : data.u1)) ||
+            null;
+          if (alive) setPeerUid(other);
+        }
       } catch (e) {
-        console.error("Load other user:", e);
-        if (!cancelled) setOtherUser(null);
+        console.error(e);
       }
     })();
-    return () => { cancelled = true; };
-  }, [otherUid]);
+    return () => { alive = false; };
+  }, [matchId, myUid, peerUid]);
 
+  // Ensure thread & listen to messages
   useEffect(() => {
-    if (!matchId) return;
-    const q = query(
-      collection(db, "chats", matchId, "messages"),
-      orderBy("createdAt", "asc"),
-      limit(500)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const list = [];
-      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-      setMessages(list);
-      setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
-    });
-    return () => unsub();
-  }, [matchId]);
+    if (!myUid || !peerUid) return;
+    let unsub = null;
+    (async () => {
+      const tid = await ensureThread(myUid, peerUid);
+      setThreadId(tid);
+      unsub = listenMessages(tid, setMessages);
+    })();
+    return () => { if (unsub) unsub(); };
+  }, [myUid, peerUid]);
 
-  async function sendMessage(e) {
+  // Autoscroll + mark last incoming as read
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!threadId || !myUid || !messages.length) return;
+    const last = messages[messages.length - 1];
+    if (last.from !== myUid) {
+      markThreadRead(threadId, myUid).catch(() => {});
+    }
+  }, [messages, myUid, threadId]);
+
+  const emptyState = useMemo(() => !peerUid, [peerUid]);
+
+  async function onSend(e) {
     e.preventDefault();
-    const trimmed = text.trim();
-    if (!trimmed || !me || !matchId) return;
+    if (!threadId || !myUid || !peerUid || !text.trim()) return;
     try {
-      await addDoc(collection(db, "chats", matchId, "messages"), {
-        text: trimmed,
-        senderUid: me.uid,
-        fromUid: me.uid,
-        createdAt: serverTimestamp(),
-      });
+      setBusy(true);
+      await sendMessage(threadId, { from: myUid, to: peerUid, text });
       setText("");
     } catch (e) {
-      console.error("sendMessage:", e);
+      console.error(e);
+      alert(e?.message || "Failed to send.");
+    } finally {
+      setBusy(false);
     }
   }
 
-  const headerName = useMemo(() => {
-    return otherUser?.displayName || otherUser?.name || "Conversation";
-  }, [otherUser]);
-
-  if (!me) {
+  if (emptyState) {
     return (
-      <div className="container py-5 text-center">
-        <h4>Please sign in</h4>
-        <Link className="btn btn-primary mt-2" to="/login">Go to login</Link>
+      <div className="container" style={{ padding: 16 }}>
+        <h3 className="text-white fw-bold mb-2">Chat</h3>
+        <div className="text-white-50">Pick someone from Matches or Browse to start a chat.</div>
       </div>
     );
   }
-
-  if (!matchId) {
-    return (
-      <div className="container py-5 text-center text-white">
-  <h4>Messages</h4>
-  <p>Select someone from Matches, or start a chat from Browse.</p>
-</div>
-
-    );
-  }
-
-  const photo =
-    otherUser?.photoURL ||
-    (otherUser?.photos && Array.isArray(otherUser.photos) && otherUser.photos[0]) ||
-    "https://via.placeholder.com/200x200?text=Photo";
-  const isCollegeVerified = !!otherUser?.verification?.college;
 
   return (
-    <div className="container py-3" style={{ maxWidth: 800 }}>
-      {/* Header */}
-      <div className="d-flex align-items-center gap-3 mb-3">
-        <ZoomableAvatar
-          src={photo}
-          alt={headerName}
-          size={56}
-          rounded={999}
-          badgeSize={18}
-          badgePosition="br"
-          verified={isCollegeVerified}
-        />
-        <div className="me-auto">
-          <div style={{ fontWeight: 700, fontSize: 18 }}>{headerName}</div>
-          {isCollegeVerified && (
-            <div className="text-muted" style={{ fontSize: 12 }}>College verified</div>
-          )}
-        </div>
-        <Link className="btn btn-outline-secondary btn-sm" to="/matches">Back to Matches</Link>
-      </div>
+    <div className="container" style={{ padding: 16, maxWidth: 820 }}>
+      <h3 className="text-white fw-bold mb-2">Chat</h3>
 
-      {/* Messages */}
-      <div className="border rounded p-3 mb-3" style={{ height: 420, overflowY: "auto", background: "#fff" }}>
-        {messages.length === 0 && (
-          <div className="text-muted text-center">No messages yet — say hi 👋</div>
-        )}
-        {messages.map((m) => {
-          const mine = m.senderUid === me.uid || m.fromUid === me.uid;
-          return (
-            <div key={m.id} className={`d-flex ${mine ? "justify-content-end" : "justify-content-start"} mb-2`}>
-              <div className={`px-3 py-2 rounded-3 ${mine ? "bg-warning" : "bg-light"}`} style={{ maxWidth: "70%" }}>
-                <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>
+      <div
+        className="card"
+        style={{
+          borderRadius: 16,
+          background: "rgba(0,0,0,.25)",
+          border: "1px solid rgba(255,255,255,.2)",
+          minHeight: 380,
+          display: "flex",
+        }}
+      >
+        {/* messages */}
+        <div className="p-3" style={{ flex: 1, overflowY: "auto" }}>
+          {messages.map((m) => (
+            <div key={m.id} className={`d-flex justify-content-${bubbleSide(myUid, m)} mb-2`}>
+              <div
+                className={`px-3 py-2 rounded-3 ${
+                  m.from === myUid ? "bg-warning text-dark" : "bg-light text-dark"
+                }`}
+                style={{ maxWidth: "80%", fontWeight: 700 }}
+                title={
+                  m.createdAt?.seconds
+                    ? new Date(m.createdAt.seconds * 1000).toLocaleString()
+                    : ""
+                }
+              >
+                {m.text}
               </div>
             </div>
-          );
-        })}
-        <div ref={endRef} />
-      </div>
+          ))}
+          <div ref={endRef} />
+        </div>
 
-      {/* Composer */}
-      <form onSubmit={sendMessage} className="d-flex gap-2">
-        <input
-          className="form-control"
-          placeholder="Type a message…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <button className="btn btn-primary" disabled={!text.trim()}>Send</button>
-      </form>
+        {/* composer */}
+        <form onSubmit={onSend} className="border-top p-2 d-flex" style={{ gap: 8 }}>
+          <input
+            className="form-control"
+            placeholder="Type a message…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <button className="btn btn-primary fw-bold" disabled={busy || !text.trim()}>
+            Send
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

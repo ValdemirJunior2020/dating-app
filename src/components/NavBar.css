@@ -86,7 +86,7 @@
   gap: 10px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
+  background: #4b2902;
   border: 1px solid rgba(230, 183, 109, 0.25);
   color: var(--text-light);
 }
@@ -112,14 +112,16 @@
 }
 .user-chip .avatar .online {
   position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 10px;
-  height: 10px;
-  background: #22c55e; /* green */
+  right: -2px;
+  bottom: -2px;
+  width: 14px;
+  height: 14px;
+  background: #22c55e; /* bright green */
   border: 2px solid var(--brown-900);
   border-radius: 50%;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.95);
+  filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.9));
+  animation: pulseDot 1.6s ease-in-out infinite;
 }
 .user-chip .user-text .hello {
   color: var(--honey);
@@ -139,4 +141,9 @@
   background: linear-gradient(180deg, var(--brown-900), var(--brown-800)) !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+}
+@keyframes pulseDot {
+  0%   { transform: scale(1);   box-shadow: 0 0 6px rgba(34,197,94,.9); }
+  50%  { transform: scale(1.18); box-shadow: 0 0 14px rgba(34,197,94,1); }
+  100% { transform: scale(1);   box-shadow: 0 0 6px rgba(34,197,94,.9); }
 }

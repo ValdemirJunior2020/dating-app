@@ -1,115 +1,95 @@
 // src/services/chat.js
-import { auth, db } from "../firebase";
 import {
+  addDoc,
+  collection,
   doc,
   getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
   setDoc,
   updateDoc,
-  collection,
-  addDoc,
-  serverTimestamp,
-  onSnapshot,
-  query,
-  orderBy,
+  where,
 } from "firebase/firestore";
+import { db } from "../firebase";
 
-/**
- * Ensure a chat doc exists for the given matchId.
- * - Reads matches/{matchId} to verify the current user is a participant
- * - Upserts chats/{matchId} with metadata
- */
-export async function ensureChat(matchId) {
-  if (!matchId) throw new Error("Missing matchId");
-  const me = auth.currentUser?.uid;
-  if (!me) throw new Error("Not signed in");
+/** Stable thread id for two users */
+export function threadIdFor(a, b) {
+  const [x, y] = [a, b].sort();
+  return `t_${x}_${y}`;
+}
 
-  const matchRef = doc(db, "matches", matchId);
-  const matchSnap = await getDoc(matchRef);
-  if (!matchSnap.exists()) {
-    throw new Error("Match not found for matchId=" + matchId);
-  }
-  const match = matchSnap.data();
-  const users = match.users || [];
-
-  if (!users.includes(me)) {
-    throw new Error("You are not a participant in this match.");
-  }
-
-  const chatRef = doc(db, "chats", matchId);
-  // Create/merge the chat metadata
-  await setDoc(
-    chatRef,
-    {
-      id: matchId,
-      users,
+/** Ensure a thread doc exists and return its id */
+export async function ensureThread(myUid, otherUid) {
+  const tid = threadIdFor(myUid, otherUid);
+  const tRef = doc(db, "threads", tid);
+  const tSnap = await getDoc(tRef);
+  if (!tSnap.exists()) {
+    await setDoc(tRef, {
+      id: tid,
+      users: [myUid, otherUid].sort(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      lastMessage: null,
+      last: null, // { from, to, text, at, readBy: { [uid]: true } }
+    });
+  }
+  return tid;
+}
+
+/** Live messages (ascending) */
+export function listenMessages(threadId, cb) {
+  const msgsRef = collection(db, "threads", threadId, "messages");
+  const qy = query(msgsRef, orderBy("createdAt", "asc"));
+  return onSnapshot(qy, (snap) => {
+    const rows = [];
+    snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+    cb(rows);
+  });
+}
+
+/** Send message + update thread.last (sender marked read) */
+export async function sendMessage(threadId, { from, to, text }) {
+  const clean = String(text || "").trim();
+  if (!clean) return;
+
+  const tRef = doc(db, "threads", threadId);
+  const msgsRef = collection(db, "threads", threadId, "messages");
+
+  await addDoc(msgsRef, {
+    from,
+    to,
+    text: clean,
+    createdAt: serverTimestamp(),
+    readBy: { [from]: true },
+  });
+
+  await setDoc(
+    tRef,
+    {
+      last: { from, to, text: clean, at: serverTimestamp(), readBy: { [from]: true } },
+      updatedAt: serverTimestamp(),
     },
     { merge: true }
   );
-
-  return chatRef;
 }
 
-/**
- * Send a message to chats/{matchId}/messages with fields allowed by rules.
- * Firestore rules typically require senderUid == request.auth.uid.
- */
-export async function sendMessage(matchId, text) {
-  const me = auth.currentUser?.uid;
-  if (!me) throw new Error("Not signed in");
-  if (!matchId) throw new Error("Missing matchId");
-  const trimmed = (text || "").trim();
-  if (!trimmed) return;
-
-  // Make sure chat exists & we are allowed
-  await ensureChat(matchId);
-
-  const msgsCol = collection(db, "chats", matchId, "messages");
-  const now = serverTimestamp();
-
-  const docRef = await addDoc(msgsCol, {
-    text: trimmed,
-    senderUid: me,          // REQUIRED by rules
-    createdAt: now,
+/** Mark last message in a thread as read by uid (for unread badges/dots) */
+export async function markThreadRead(threadId, uid) {
+  const tRef = doc(db, "threads", threadId);
+  await updateDoc(tRef, {
+    [`last.readBy.${uid}`]: true,
+    updatedAt: serverTimestamp(),
   });
-
-  // Update chat metadata
-  await updateDoc(doc(db, "chats", matchId), {
-    updatedAt: now,
-    lastMessage: {
-      text: trimmed,
-      senderUid: me,
-      at: now,
-    },
-  });
-
-  return docRef.id;
 }
 
-/**
- * Subscribe to messages ordered by createdAt asc.
- * onData receives an array of { id, ...data }
- * Returns the unsubscribe function.
- */
-export function subscribeMessages(matchId, onData, onError) {
-  if (!matchId) throw new Error("Missing matchId");
-  const qy = query(
-    collection(db, "chats", matchId, "messages"),
-    orderBy("createdAt", "asc")
-  );
-
-  return onSnapshot(
-    qy,
-    (snap) => {
-      const out = [];
-      snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
-      onData?.(out);
-    },
-    (err) => {
-      console.error("subscribeMessages error:", err);
-      onError?.(err);
-    }
-  );
+/** Listen to all threads for a user (used by unread badges) */
+export function listenThreadsForUser(uid, cb) {
+  const tCol = collection(db, "threads");
+  const qy = query(tCol, where("users", "array-contains", uid));
+  return onSnapshot(qy, (snap) => {
+    const out = [];
+    snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+    cb(out);
+  });
 }
