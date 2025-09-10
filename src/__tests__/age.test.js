@@ -1,4 +1,4 @@
-﻿import { calcAge, parseDob } from "../utils/age";
+import { calcAge, parseDob } from "../utils/age";
 
 describe("age utils", () => {
   test("parseDob handles ISO string", () => {

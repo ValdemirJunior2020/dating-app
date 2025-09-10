@@ -1,4 +1,4 @@
-﻿import { threadIdFor } from "../services/chat";
+import { threadIdFor } from "../services/chat";
 
 describe("chat helpers", () => {
   test("threadIdFor is stable regardless of order", () => {
