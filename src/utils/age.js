@@ -1,4 +1,4 @@
-﻿export function parseDob(input) {
+export function parseDob(input) {
   if (!input) return null;
   if (typeof input === "string") {
     const d = new Date(input);
