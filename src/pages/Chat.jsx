@@ -1,10 +1,11 @@
 // src/pages/Chat.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
-import { ensureThread, listenMessages, sendMessage, markThreadRead } from "../services/chat";
+import { ensureThread, listenMessages, sendMessage } from "../services/chat";
+import { isCollegeVerified } from "../services/eligibility";
 
 function bubbleSide(me, msg) {
   return msg.from === me ? "end" : "start";
@@ -16,6 +17,8 @@ export default function Chat() {
   const me = auth.currentUser || auth.user || null;
   const myUid = me?.uid || null;
 
+  const [meDoc, setMeDoc] = useState(null);
+  const [peerDoc, setPeerDoc] = useState(null);
   const [peerUid, setPeerUid] = useState(otherUid || null);
   const [threadId, setThreadId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -23,30 +26,48 @@ export default function Chat() {
   const [text, setText] = useState("");
   const endRef = useRef(null);
 
-  // Resolve peer from match doc if needed
+  // Load my doc
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (peerUid || !matchId || !myUid) return;
-      try {
-        const mRef = doc(db, "matches", matchId);
-        const mSnap = await getDoc(mRef);
-        if (mSnap.exists()) {
-          const data = mSnap.data() || {};
-          const other =
-            (Array.isArray(data.users) && data.users.find((u) => u !== myUid)) ||
-            (data.u1 && data.u2 && (data.u1 === myUid ? data.u2 : data.u1)) ||
-            null;
-          if (alive) setPeerUid(other);
-        }
-      } catch (e) {
-        console.error(e);
+      if (!myUid) { setMeDoc(null); return; }
+      const s = await getDoc(doc(db, "users", myUid));
+      if (alive) setMeDoc(s.exists() ? { id: s.id, ...s.data() } : null);
+    })();
+    return () => { alive = false; };
+  }, [myUid]);
+
+  // Resolve peer from match doc if needed; also load peer doc
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      let resolved = otherUid || null;
+      if (!resolved && matchId && myUid) {
+        try {
+          const mRef = doc(db, "matches", matchId);
+          const mSnap = await getDoc(mRef);
+          if (mSnap.exists()) {
+            const data = mSnap.data() || {};
+            resolved =
+              (Array.isArray(data.users) && data.users.find((u) => u !== myUid)) ||
+              (data.u1 && data.u2 && (data.u1 === myUid ? data.u2 : data.u1)) ||
+              null;
+          }
+        } catch (e) { console.error(e); }
+      }
+      if (alive) setPeerUid(resolved);
+
+      if (resolved) {
+        const s = await getDoc(doc(db, "users", resolved));
+        if (alive) setPeerDoc(s.exists() ? { id: s.id, ...s.data() } : null);
+      } else {
+        if (alive) setPeerDoc(null);
       }
     })();
     return () => { alive = false; };
-  }, [matchId, myUid, peerUid]);
+  }, [matchId, myUid, otherUid]);
 
-  // Ensure thread & listen to messages
+  // Ensure thread & listen
   useEffect(() => {
     if (!myUid || !peerUid) return;
     let unsub = null;
@@ -55,24 +76,23 @@ export default function Chat() {
       setThreadId(tid);
       unsub = listenMessages(tid, setMessages);
     })();
-    return () => { if (unsub) unsub(); };
+    return () => { unsub && unsub(); };
   }, [myUid, peerUid]);
 
-  // Autoscroll + mark last incoming as read
+  // autoscroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-    if (!threadId || !myUid || !messages.length) return;
-    const last = messages[messages.length - 1];
-    if (last.from !== myUid) {
-      markThreadRead(threadId, myUid).catch(() => {});
-    }
-  }, [messages, myUid, threadId]);
+  }, [messages.length]);
 
   const emptyState = useMemo(() => !peerUid, [peerUid]);
 
+  const meVerified = isCollegeVerified(meDoc);
+  const peerVerified = isCollegeVerified(peerDoc);
+  const canChat = meVerified && peerVerified;
+
   async function onSend(e) {
     e.preventDefault();
-    if (!threadId || !myUid || !peerUid || !text.trim()) return;
+    if (!canChat || !threadId || !myUid || !peerUid || !text.trim()) return;
     try {
       setBusy(true);
       await sendMessage(threadId, { from: myUid, to: peerUid, text });
@@ -97,6 +117,18 @@ export default function Chat() {
   return (
     <div className="container" style={{ padding: 16, maxWidth: 820 }}>
       <h3 className="text-white fw-bold mb-2">Chat</h3>
+
+      {!canChat && (
+        <div className="alert alert-warning py-2">
+          Only <strong>college-verified members</strong> can chat each other.{" "}
+          {!meVerified && (
+            <>
+              <Link to="/edu-signup" className="alert-link">Verify your .edu</Link>{" "}
+            </>
+          )}
+          {!peerVerified && "This person isn’t verified yet."}
+        </div>
+      )}
 
       <div
         className="card"
@@ -137,8 +169,9 @@ export default function Chat() {
             placeholder="Type a message…"
             value={text}
             onChange={(e) => setText(e.target.value)}
+            disabled={!canChat}
           />
-          <button className="btn btn-primary fw-bold" disabled={busy || !text.trim()}>
+          <button className="btn btn-primary fw-bold" disabled={!canChat || busy || !text.trim()}>
             Send
           </button>
         </form>

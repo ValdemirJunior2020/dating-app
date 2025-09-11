@@ -22,7 +22,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "test:watch": "react-scripts test --watchAll",
-    "test:cov": "react-scripts test --coverage"
+    "test:cov": "react-scripts test --coverage",
+    "netlify": "netlify dev"
   },
   "eslintConfig": {
     "extends": [
