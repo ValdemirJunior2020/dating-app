@@ -12,79 +12,80 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
 
-/** Stable thread id for two users */
-export function threadIdFor(a, b) {
-  const [x, y] = [a, b].sort();
-  return `t_${x}_${y}`;
+function normalizeUid(u) {
+  if (!u) return null;
+  if (typeof u === "string") return u;
+  if (typeof u === "object") return u.uid || u.id || u.userId || null;
+  return null;
 }
 
-/** Ensure a thread doc exists and return its id */
-export async function ensureThread(myUid, otherUid) {
-  const tid = threadIdFor(myUid, otherUid);
+export function threadIdFor(uida, uidb) {
+  const [a, b] = [uida, uidb].sort();
+  return `${a}_${b}`;
+}
+
+export async function ensureThread(other) {
+  const me = auth.currentUser?.uid || null;
+  const otherUid = normalizeUid(other);
+  if (!me || !otherUid || otherUid === me) return null;
+
+  const tid = threadIdFor(me, otherUid);
   const tRef = doc(db, "threads", tid);
-  const tSnap = await getDoc(tRef);
-  if (!tSnap.exists()) {
+  const snap = await getDoc(tRef);
+  if (!snap.exists()) {
     await setDoc(tRef, {
-      id: tid,
-      users: [myUid, otherUid].sort(),
+      users: [me, otherUid].sort(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      last: null, // { from, to, text, at, readBy: { [uid]: true } }
+      lastMessageAt: serverTimestamp(),
     });
+    // confirm creation to avoid race with message/query listeners
+    await getDoc(tRef);
   }
   return tid;
 }
 
-/** Live messages (ascending) */
-export function listenMessages(threadId, cb) {
-  const msgsRef = collection(db, "threads", threadId, "messages");
-  const qy = query(msgsRef, orderBy("createdAt", "asc"));
-  return onSnapshot(qy, (snap) => {
-    const rows = [];
-    snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
-    cb(rows);
-  });
-}
-
-/** Send message + update thread.last (sender marked read) */
-export async function sendMessage(threadId, { from, to, text }) {
-  const clean = String(text || "").trim();
+export async function sendMessage(tid, text) {
+  const me = auth.currentUser?.uid || null;
+  if (!me || !tid) return;
+  const clean = String(text ?? "").trim();
   if (!clean) return;
 
-  const tRef = doc(db, "threads", threadId);
-  const msgsRef = collection(db, "threads", threadId, "messages");
-
-  await addDoc(msgsRef, {
-    from,
-    to,
+  await addDoc(collection(db, "threads", tid, "messages"), {
+    from: me,
     text: clean,
     createdAt: serverTimestamp(),
-    readBy: { [from]: true },
-  });
-
-  await setDoc(
-    tRef,
-    {
-      last: { from, to, text: clean, at: serverTimestamp(), readBy: { [from]: true } },
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-}
-
-/** Mark last message in a thread as read by uid (for unread badges/dots) */
-export async function markThreadRead(threadId, uid) {
-  const tRef = doc(db, "threads", threadId);
-  await updateDoc(tRef, {
-    [`last.readBy.${uid}`]: true,
     updatedAt: serverTimestamp(),
   });
+
+  await updateDoc(doc(db, "threads", tid), {
+    updatedAt: serverTimestamp(),
+    lastMessageAt: serverTimestamp(),
+  });
 }
 
-/** Listen to all threads for a user (used by unread badges) */
+export async function sendMessageTo(other, text) {
+  const tid = await ensureThread(other);
+  if (!tid) return null;
+  await sendMessage(tid, text);
+  return tid;
+}
+
+export function listenMessages(tid, cb) {
+  if (!tid) return () => {};
+  const c = collection(db, "threads", tid, "messages");
+  const qy = query(c, orderBy("createdAt", "asc"));
+  return onSnapshot(qy, (snap) => {
+    const out = [];
+    snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+    cb(out);
+  });
+}
+
 export function listenThreadsForUser(uid, cb) {
+  if (!uid) return () => {};
   const tCol = collection(db, "threads");
   const qy = query(tCol, where("users", "array-contains", uid));
   return onSnapshot(qy, (snap) => {

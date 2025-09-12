@@ -4,8 +4,6 @@ import { Routes, Route } from "react-router-dom";
 
 import NavBar from "./components/NavBar";
 import RequireAuth from "./components/RequireAuth";
-import RequireCollegeVerified from "./components/RequireCollegeVerified";
-import RequireProfilePhoto from "./components/RequireProfilePhoto";
 import ImageLightboxRoot from "./components/ImageLightbox";
 
 // Pages
@@ -18,7 +16,7 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import EmailLogin from "./pages/EmailLogin";
-import ResetPassword from "./pages/ResetPassword"; // ← keep only this ONE import
+import ResetPassword from "./pages/ResetPassword"; // ← single import
 import EduSignUp from "./pages/EduSignUp";
 import PublicProfile from "./pages/PublicProfile";
 import Discover from "./pages/Discover";
@@ -50,37 +48,112 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/login-email" element={<EmailLogin />} />
-          <Route path="/reset" element={<ResetPassword />} /> {/* ← only once */}
+          <Route path="/reset" element={<ResetPassword />} />
           <Route path="/edu-signup" element={<EduSignUp />} />
 
           {/* Auth-required public profile */}
-          <Route path="/u/:uid" element={<RequireAuth><PublicProfile /></RequireAuth>} />
+          <Route
+            path="/u/:uid"
+            element={
+              <RequireAuth>
+                <PublicProfile />
+              </RequireAuth>
+            }
+          />
 
           {/* Private */}
+          {/* ✅ Browse: any signed-in user can view (actions gated inside page) */}
           <Route
             path="/browse"
             element={
               <RequireAuth>
-                <RequireCollegeVerified>
-                  <RequireProfilePhoto>
-                    <Browse />
-                  </RequireProfilePhoto>
-                </RequireCollegeVerified>
+                <Browse />
               </RequireAuth>
             }
           />
-          <Route path="/matches" element={<RequireAuth><Matches /></RequireAuth>} />
-          <Route path="/online"  element={<RequireAuth><Online /></RequireAuth>} />
-          <Route path="/chat"    element={<RequireAuth><Chat /></RequireAuth>} />
-          <Route path="/chat/:matchId" element={<RequireAuth><Chat /></RequireAuth>} />
-          <Route path="/chat/with/:otherUid" element={<RequireAuth><Chat /></RequireAuth>} />
-          <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+
+          <Route
+            path="/matches"
+            element={
+              <RequireAuth>
+                <Matches />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/online"
+            element={
+              <RequireAuth>
+                <Online />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <RequireAuth>
+                <Chat />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/chat/:matchId"
+            element={
+              <RequireAuth>
+                <Chat />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/chat/with/:otherUid"
+            element={
+              <RequireAuth>
+                <Chat />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <Settings />
+              </RequireAuth>
+            }
+          />
 
           {/* Extras */}
-          <Route path="/discover" element={<RequireAuth><Discover /></RequireAuth>} />
-          <Route path="/profile/interests" element={<RequireAuth><ProfileInterests /></RequireAuth>} />
-          <Route path="/rewards" element={<RequireAuth><Rewards /></RequireAuth>} />
-          <Route path="/report/:uid" element={<RequireAuth><Report /></RequireAuth>} />
+          <Route
+            path="/discover"
+            element={
+              <RequireAuth>
+                <Discover />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile/interests"
+            element={
+              <RequireAuth>
+                <ProfileInterests />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/rewards"
+            element={
+              <RequireAuth>
+                <Rewards />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/report/:uid"
+            element={
+              <RequireAuth>
+                <Report />
+              </RequireAuth>
+            }
+          />
         </Routes>
       </main>
     </ToasterProvider>
