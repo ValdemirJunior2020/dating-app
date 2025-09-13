@@ -11,9 +11,17 @@ import {
   sendMessage,
   markThreadRead,
 } from "../services/chat";
+import {
+  listenPresence,
+  setTypingIn,
+} from "../services/presence";
 
 function bubbleSide(meUid, msg) {
   return msg.from === meUid ? "end" : "start";
+}
+function isRecentlyOnline(p) {
+  if (!p?.lastSeen?.toDate) return false;
+  return Date.now() - p.lastSeen.toDate().getTime() < 2 * 60 * 1000; // 2 min
 }
 
 export default function Chat() {
@@ -21,7 +29,7 @@ export default function Chat() {
   const { user: me } = useAuth() || {};
   const myUid = me?.uid || null;
 
-  // Accept multiple param names for safety
+  // Accept multiple param names
   const peerUid =
     params.otherUid || params.uid || params.userId || params.id || params.matchId || null;
 
@@ -31,36 +39,37 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
+  const [peerPresence, setPeerPresence] = useState(null);
+
   const endRef = useRef(null);
+  const typingTimer = useRef(null);
+  const lastTypingSent = useRef(null);
 
   // Load peer user doc
   useEffect(() => {
-    let alive = true;
+    let cancelled = false;
     (async () => {
       if (!peerUid) {
-        setPeerDoc(null);
+        if (!cancelled) setPeerDoc(null);
         return;
       }
       const s = await getDoc(doc(db, "users", peerUid));
-      if (!alive) return;
-      setPeerDoc(s.exists() ? { id: peerUid, ...s.data() } : null);
+      if (!cancelled) setPeerDoc(s.exists() ? { id: peerUid, ...s.data() } : null);
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { cancelled = true; };
   }, [peerUid]);
 
-  // Ensure thread & subscribe to messages/meta
+  // Ensure thread & subscribe to messages + meta
   useEffect(() => {
     let unsubMsgs = null;
     let unsubMeta = null;
-    let alive = true;
+    let cancelled = false;
 
     (async () => {
       if (!myUid || !peerUid) return;
 
       const tid = await ensureThread(peerUid);
-      if (!alive || !tid) return;
+      if (cancelled || !tid) return;
 
       setThreadId(tid);
 
@@ -73,11 +82,18 @@ export default function Chat() {
     })();
 
     return () => {
-      alive = false;
+      cancelled = true;
       if (unsubMsgs) unsubMsgs();
       if (unsubMeta) unsubMeta();
     };
   }, [myUid, peerUid]);
+
+  // Subscribe to peer presence
+  useEffect(() => {
+    if (!peerUid) return () => {};
+    const unsub = listenPresence(peerUid, setPeerPresence);
+    return unsub;
+  }, [peerUid]);
 
   // Mark as read when viewing if the last message is from the peer
   useEffect(() => {
@@ -91,6 +107,40 @@ export default function Chat() {
     }
   }, [threadId, threadMeta, myUid]);
 
+  // Typing indicator: send typingIn threadId while user is typing, clear after idle
+  useEffect(() => {
+    if (!threadId || !myUid) return;
+
+    const now = Date.now();
+    const isTyping = text.trim().length > 0;
+
+    // Throttle writes to at most one every 1s
+    const canWrite =
+      !lastTypingSent.current || now - lastTypingSent.current > 1000;
+
+    if (isTyping && canWrite) {
+      setTypingIn(threadId);
+      lastTypingSent.current = now;
+    }
+    if (!isTyping && canWrite) {
+      setTypingIn(null);
+      lastTypingSent.current = now;
+    }
+
+    // Idle clear after 2s since last keystroke
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    if (isTyping) {
+      typingTimer.current = setTimeout(() => {
+        setTypingIn(null);
+        lastTypingSent.current = Date.now();
+      }, 2000);
+    }
+
+    return () => {
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+    };
+  }, [text, threadId, myUid]);
+
   async function onSend(e) {
     e.preventDefault();
     const clean = String(text || "").trim();
@@ -99,7 +149,6 @@ export default function Chat() {
     try {
       setBusy(true);
 
-      // create thread on demand if effect hasn't finished yet
       let tid = threadId;
       if (!tid && peerUid) {
         tid = await ensureThread(peerUid);
@@ -109,31 +158,39 @@ export default function Chat() {
 
       await sendMessage(tid, clean);
       setText("");
+      // stop typing state immediately after send
+      setTypingIn(null);
+      lastTypingSent.current = Date.now();
     } finally {
       setBusy(false);
     }
   }
 
   const title = peerDoc?.displayName || peerDoc?.name || "Chat";
+  const peerTyping = peerPresence?.typingIn === threadId;
+  const peerOnline = peerPresence?.online || isRecentlyOnline(peerPresence);
 
-  // Read receipt for last outgoing message
   const readReceipt = useMemo(() => {
     if (!threadMeta || !myUid) return null;
     const last = threadMeta.last || {};
-    if (last.from !== myUid) return null; // only show for my last message
+    if (last.from !== myUid) return null;
     const peerRead = last.readBy && peerUid && last.readBy[peerUid];
     return peerRead ? "Read" : "Sent";
   }, [threadMeta, myUid, peerUid]);
 
   return (
     <div className="container py-3">
-      <div className="d-flex align-items-center justify-content-between mb-3">
+      <div className="d-flex align-items-center justify-content-between mb-2">
         <div className="d-flex align-items-center gap-2">
           <Link to="/messages" className="btn btn-sm btn-outline-secondary">
             ← Back
           </Link>
           <h5 className="m-0">{title}</h5>
+          {peerOnline && <span className="badge bg-success">Online</span>}
         </div>
+        {peerTyping && (
+          <div className="text-muted small">typing…</div>
+        )}
       </div>
 
       <div className="card shadow-sm">
@@ -153,7 +210,6 @@ export default function Chat() {
             </div>
           ))}
 
-          {/* Read receipt (last outgoing) */}
           {readReceipt && (
             <div className="text-muted small mt-2 d-flex justify-content-end">
               {readReceipt}
