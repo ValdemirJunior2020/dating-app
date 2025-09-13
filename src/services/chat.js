@@ -29,8 +29,7 @@ export function threadIdFor(uida, uidb) {
 
 /**
  * Ensure a thread exists between current user and the other user.
- * Accepts a uid string OR a user object. Returns the thread id or null.
- * Writes only the keys your rules allow on create: ['users','createdAt','updatedAt','lastMessageAt'].
+ * Writes only the keys allowed by rules on create.
  */
 export async function ensureThread(other) {
   const me = auth.currentUser?.uid || null;
@@ -48,18 +47,25 @@ export async function ensureThread(other) {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         lastMessageAt: serverTimestamp(),
+        // Optional seed; empty last object avoids null checks
+        last: {
+          from: me,
+          text: "",
+          at: serverTimestamp(),
+          readBy: { [me]: true },
+        },
       },
       { merge: false }
     );
   } catch (_e) {
-    // If it already exists or an update is denied, we still proceed with tid.
+    // If doc exists or update is denied, we still proceed with tid.
   }
   return tid;
 }
 
 /**
  * Send a message within a thread.
- * Writes only the keys your rules allow on create: ['from','text','createdAt','updatedAt'].
+ * Also updates thread.last for read receipts and preview.
  */
 export async function sendMessage(tid, text) {
   const me = auth.currentUser?.uid || null;
@@ -76,10 +82,27 @@ export async function sendMessage(tid, text) {
     updatedAt: serverTimestamp(),
   });
 
-  // 2) Bump thread timestamps (allowed by rules)
+  // 2) Update thread meta (+ last)
   await updateDoc(doc(db, "threads", tid), {
     updatedAt: serverTimestamp(),
     lastMessageAt: serverTimestamp(),
+    last: {
+      from: me,
+      text: clean,
+      at: serverTimestamp(),
+      // sender has implicitly "read"
+      readBy: { [me]: true },
+    },
+  });
+}
+
+/** Mark the thread's last message as read by uid */
+export async function markThreadRead(tid, uid) {
+  if (!tid || !uid) return;
+  await updateDoc(doc(db, "threads", tid), {
+    updatedAt: serverTimestamp(),
+    // dot-notation to set read flag for this uid
+    [`last.readBy.${uid}`]: true,
   });
 }
 
@@ -103,7 +126,14 @@ export function listenMessages(tid, cb) {
   });
 }
 
-/** Listen to all threads for a user (used by inbox/unread UI) */
+/** Listen to thread meta (to read `last`, `lastMessageAt`, etc.) */
+export function listenThreadMeta(tid, cb) {
+  if (!tid) return () => {};
+  const tRef = doc(db, "threads", tid);
+  return onSnapshot(tRef, (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null));
+}
+
+/** Listen to all threads for a user (inbox) */
 export function listenThreadsForUser(uid, cb) {
   if (!uid) return () => {};
   const tCol = collection(db, "threads");

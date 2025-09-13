@@ -1,10 +1,16 @@
 // src/pages/Chat.jsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
-import { ensureThread, listenMessages, sendMessage } from "../services/chat";
+import {
+  ensureThread,
+  listenMessages,
+  listenThreadMeta,
+  sendMessage,
+  markThreadRead,
+} from "../services/chat";
 
 function bubbleSide(meUid, msg) {
   return msg.from === meUid ? "end" : "start";
@@ -15,12 +21,13 @@ export default function Chat() {
   const { user: me } = useAuth() || {};
   const myUid = me?.uid || null;
 
-  // Be liberal about route param name
+  // Accept multiple param names for safety
   const peerUid =
-    params.otherUid || params.uid || params.userId || params.id || null;
+    params.otherUid || params.uid || params.userId || params.id || params.matchId || null;
 
   const [peerDoc, setPeerDoc] = useState(null);
   const [threadId, setThreadId] = useState(null);
+  const [threadMeta, setThreadMeta] = useState(null);
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
@@ -43,29 +50,46 @@ export default function Chat() {
     };
   }, [peerUid]);
 
-  // Ensure thread (if possible) & subscribe to messages
+  // Ensure thread & subscribe to messages/meta
   useEffect(() => {
-    let unsub = null;
+    let unsubMsgs = null;
+    let unsubMeta = null;
     let alive = true;
 
     (async () => {
       if (!myUid || !peerUid) return;
 
-      const tid = await ensureThread(peerUid); // may return null if not ready/self
+      const tid = await ensureThread(peerUid);
       if (!alive || !tid) return;
 
       setThreadId(tid);
-      unsub = listenMessages(tid, (msgs) => {
+
+      unsubMsgs = listenMessages(tid, (msgs) => {
         setMessages(msgs);
         setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
       });
+
+      unsubMeta = listenThreadMeta(tid, (meta) => setThreadMeta(meta));
     })();
 
     return () => {
       alive = false;
-      if (unsub) unsub();
+      if (unsubMsgs) unsubMsgs();
+      if (unsubMeta) unsubMeta();
     };
   }, [myUid, peerUid]);
+
+  // Mark as read when viewing if the last message is from the peer
+  useEffect(() => {
+    if (!threadId || !threadMeta || !myUid) return;
+    const last = threadMeta.last || {};
+    if (last.from && last.from !== myUid) {
+      const already = last.readBy && last.readBy[myUid];
+      if (!already) {
+        markThreadRead(threadId, myUid);
+      }
+    }
+  }, [threadId, threadMeta, myUid]);
 
   async function onSend(e) {
     e.preventDefault();
@@ -75,8 +99,7 @@ export default function Chat() {
     try {
       setBusy(true);
 
-      // If thread not created yet (e.g., first keystrokes before effect finishes),
-      // create it now so the input never has to be disabled.
+      // create thread on demand if effect hasn't finished yet
       let tid = threadId;
       if (!tid && peerUid) {
         tid = await ensureThread(peerUid);
@@ -93,6 +116,15 @@ export default function Chat() {
 
   const title = peerDoc?.displayName || peerDoc?.name || "Chat";
 
+  // Read receipt for last outgoing message
+  const readReceipt = useMemo(() => {
+    if (!threadMeta || !myUid) return null;
+    const last = threadMeta.last || {};
+    if (last.from !== myUid) return null; // only show for my last message
+    const peerRead = last.readBy && peerUid && last.readBy[peerUid];
+    return peerRead ? "Read" : "Sent";
+  }, [threadMeta, myUid, peerUid]);
+
   return (
     <div className="container py-3">
       <div className="d-flex align-items-center justify-content-between mb-3">
@@ -106,7 +138,7 @@ export default function Chat() {
 
       <div className="card shadow-sm">
         <div className="card-body" style={{ minHeight: 360 }}>
-          {messages.length === 0 && <div className="text-muted">Say hi 👋</div>}
+          {messages.length === 0 && <div className="text-muted mb-2">Say hi 👋</div>}
 
           {messages.map((m) => (
             <div key={m.id} className={"d-flex justify-content-" + bubbleSide(myUid, m)}>
@@ -120,6 +152,14 @@ export default function Chat() {
               </div>
             </div>
           ))}
+
+          {/* Read receipt (last outgoing) */}
+          {readReceipt && (
+            <div className="text-muted small mt-2 d-flex justify-content-end">
+              {readReceipt}
+            </div>
+          )}
+
           <div ref={endRef} />
         </div>
 
@@ -129,7 +169,6 @@ export default function Chat() {
             placeholder="Type a message…"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            // allow typing even if threadId isn't ready yet
             disabled={busy}
           />
           <button className="btn btn-primary fw-bold" disabled={busy || !text.trim()}>

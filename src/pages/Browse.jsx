@@ -1,8 +1,17 @@
 // src/pages/Browse.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  orderBy,
+  limit as qlimit,
+} from "firebase/firestore";
+import { getDownloadURL, ref as sRef } from "firebase/storage";
+import { db, storage } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { sendLike } from "../services/likes";
 import { useToast } from "../components/Toaster";
@@ -12,10 +21,22 @@ import { isCollegeVerified } from "../services/eligibility";
 
 const PLACEHOLDER = "/logo.png";
 
-function primaryPhoto(user) {
+/** Prefer user's uploaded photos array; fall back to photoURL if present */
+function primaryPhotoFromDoc(user) {
   const arr = Array.isArray(user?.photos) ? user.photos : [];
   const first = arr.find((u) => typeof u === "string" && u.length > 6);
-  return first || (typeof user?.photoURL === "string" ? user.photoURL : null);
+  if (first) return String(first);
+  if (typeof user?.photoURL === "string" && user.photoURL.length > 6) {
+    return String(user.photoURL);
+  }
+  return null;
+}
+
+function isHttpUrl(s) {
+  return typeof s === "string" && /^https?:\/\//i.test(s);
+}
+function isStoragePath(s) {
+  return typeof s === "string" && (s.startsWith("gs://") || (!s.startsWith("http") && s.includes("/")));
 }
 
 function EduBadge({ v }) {
@@ -35,8 +56,68 @@ function Card({ meUid, meVerified, user }) {
   const toast = useToast();
   const [liking, setLiking] = useState(false);
 
-  const url = primaryPhoto(user);
-  const hasPhoto = !!url;
+  // Resolve the primary photo with fallbacks:
+  // 1) user.photos[0] or user.photoURL
+  // 2) if storage path, getDownloadURL
+  // 3) /users/{uid}/public_photos (first, newest)
+  const [photoUrl, setPhotoUrl] = useState(primaryPhotoFromDoc(user));
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      let candidate = primaryPhotoFromDoc(user);
+      if (candidate && isHttpUrl(candidate)) {
+        if (alive) setPhotoUrl(candidate);
+        return;
+      }
+      if (candidate && isStoragePath(candidate)) {
+        try {
+          const url = await getDownloadURL(sRef(storage, candidate));
+          if (alive) setPhotoUrl(url);
+          return;
+        } catch {
+          // continue to subcollection fallback
+        }
+      }
+
+      // Subcollection fallback: /users/{uid}/public_photos (newest first)
+      try {
+        const q = query(
+          collection(db, "users", user.id, "public_photos"),
+          orderBy("createdAt", "desc"),
+          qlimit(1)
+        );
+        const snap = await getDocs(q);
+        const doc0 = snap.docs[0];
+        const urlField = doc0?.data()?.url;
+        if (!urlField) {
+          if (alive) setPhotoUrl(null);
+          return;
+        }
+        if (isHttpUrl(urlField)) {
+          if (alive) setPhotoUrl(urlField);
+        } else if (isStoragePath(urlField)) {
+          try {
+            const url = await getDownloadURL(sRef(storage, urlField));
+            if (alive) setPhotoUrl(url);
+          } catch {
+            if (alive) setPhotoUrl(null);
+          }
+        } else {
+          if (alive) setPhotoUrl(null);
+        }
+      } catch {
+        if (alive) setPhotoUrl(null);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [user?.id]);
+
+  const hasPhoto = !!photoUrl;
   const peerVerified = isCollegeVerified(user);
   const name = user.displayName || user.name || "Someone";
   const age = calcAge(user.dob ?? user.age);
@@ -45,7 +126,8 @@ function Card({ meUid, meVerified, user }) {
     if (!meUid || !user?.id) return;
     try {
       setLiking(true);
-      await sendLike(meUid, user.id); // server will also double-check
+      // sendLike expects only target uid in this codebase
+      await sendLike(user.id);
       toast?.show
         ? toast.show({ title: "Liked", desc: `You liked ${name}.`, icon: "❤️" })
         : alert("Liked!");
@@ -66,7 +148,7 @@ function Card({ meUid, meVerified, user }) {
   function enlarge() {
     if (!hasPhoto) return;
     const img = document.createElement("img");
-    img.setAttribute("data-enlarge", url);
+    img.setAttribute("data-enlarge", photoUrl);
     document.body.appendChild(img);
     img.click();
     img.remove();
@@ -89,7 +171,7 @@ function Card({ meUid, meVerified, user }) {
         <EduBadge v={peerVerified} />
       </div>
 
-      {/* circular photo */}
+      {/* circular photo (big) */}
       <div
         style={{
           width: 170,
@@ -105,10 +187,10 @@ function Card({ meUid, meVerified, user }) {
         onClick={enlarge}
       >
         <img
-          src={hasPhoto ? url : PLACEHOLDER}
+          src={hasPhoto ? photoUrl : PLACEHOLDER}
           alt={name}
           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          data-enlarge={hasPhoto ? url : undefined}
+          data-enlarge={hasPhoto ? photoUrl : undefined}
         />
       </div>
 
@@ -117,7 +199,7 @@ function Card({ meUid, meVerified, user }) {
         {age ? `${name}, ${age}` : name}
       </div>
 
-      {/* actions (gated) */}
+      {/* actions (EduOnly is pass-through right now) */}
       <EduOnly canAct={meVerified} peerVerified={peerVerified} compact>
         <div className="d-flex justify-content-center gap-2">
           <button
@@ -158,7 +240,7 @@ export default function Browse() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // load my profile to know if I am college-verified
+  // load my profile to know if I am college-verified (kept for future gating)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -174,7 +256,9 @@ export default function Browse() {
         if (alive) setMe(null);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [meUid]);
 
   // load all users to browse
@@ -200,7 +284,9 @@ export default function Browse() {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [meUid]);
 
   const empty = useMemo(() => !loading && users.length === 0, [loading, users]);
@@ -210,12 +296,7 @@ export default function Browse() {
     <div className="container" style={{ padding: 16 }}>
       <h3 className="text-white fw-bold mb-3">Browse</h3>
 
-      {!meVerified && (
-        <div className="alert alert-warning py-2">
-          You can browse everyone, but <strong>only college-verified members</strong> can like or chat.{" "}
-          <Link className="alert-link" to="/edu-signup">Verify your .edu</Link>.
-        </div>
-      )}
+      {/* Removed the old "only college-verified can like/chat" warning since chat is free now */}
 
       {loading && <div className="text-white-50">Loading…</div>}
       {empty && <div className="text-white-50">No profiles to show yet.</div>}

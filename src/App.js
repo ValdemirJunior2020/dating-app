@@ -16,13 +16,17 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import EmailLogin from "./pages/EmailLogin";
-import ResetPassword from "./pages/ResetPassword"; // ← single import
+import ResetPassword from "./pages/ResetPassword";
 import EduSignUp from "./pages/EduSignUp";
 import PublicProfile from "./pages/PublicProfile";
 import Discover from "./pages/Discover";
 import ProfileInterests from "./pages/ProfileInterests";
 import Rewards from "./pages/Rewards";
 import Report from "./pages/Report";
+
+// New pages
+import Messages from "./pages/Messages";
+import Likes from "./pages/Likes";
 
 // Toaster + daily streak hook
 import { ToasterProvider } from "./components/Toaster";
@@ -62,7 +66,6 @@ export default function App() {
           />
 
           {/* Private */}
-          {/* ✅ Browse: any signed-in user can view (actions gated inside page) */}
           <Route
             path="/browse"
             element={
@@ -88,6 +91,8 @@ export default function App() {
               </RequireAuth>
             }
           />
+
+          {/* Chat (support multiple param names for safety) */}
           <Route
             path="/chat"
             element={
@@ -105,6 +110,14 @@ export default function App() {
             }
           />
           <Route
+            path="/chat/:id"
+            element={
+              <RequireAuth>
+                <Chat />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="/chat/with/:otherUid"
             element={
               <RequireAuth>
@@ -112,6 +125,25 @@ export default function App() {
               </RequireAuth>
             }
           />
+
+          {/* Inbox & Likes */}
+          <Route
+            path="/messages"
+            element={
+              <RequireAuth>
+                <Messages />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/likes"
+            element={
+              <RequireAuth>
+                <Likes />
+              </RequireAuth>
+            }
+          />
+
           <Route
             path="/settings"
             element={
