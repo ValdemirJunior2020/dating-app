@@ -1,5 +1,5 @@
 // src/App.js
-import React from "react";
+import React, { useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 
 import NavBar from "./components/NavBar";
@@ -32,9 +32,41 @@ import Likes from "./pages/Likes";
 import { ToasterProvider } from "./components/Toaster";
 import useLoginStreakEffect from "./hooks/useLoginStreakEffect";
 
+// Presence
+import { useAuth } from "./context/AuthContext";
+import { pulsePresence, setOnline } from "./services/presence";
+
 /** Runs the streak hook INSIDE ToasterProvider so useToast() has context */
 function StreakTicker() {
   useLoginStreakEffect();
+  return null;
+}
+
+/** Presence: mark online + heartbeat while signed in */
+function PresenceTicker() {
+  const { user } = useAuth() || {};
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    // go online immediately
+    setOnline(true);
+
+    // pulse every 30s
+    const iv = setInterval(() => pulsePresence(), 30_000);
+
+    // pulse when tab becomes visible again
+    const onVis = () => {
+      if (document.visibilityState === "visible") pulsePresence();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [user?.uid]); // ✅ depend on uid; fixes eslint warning
+
   return null;
 }
 
@@ -44,6 +76,7 @@ export default function App() {
       <ImageLightboxRoot />
       <NavBar />
       <StreakTicker />
+      <PresenceTicker />
 
       <main className="content-offset">
         <Routes>
@@ -74,7 +107,6 @@ export default function App() {
               </RequireAuth>
             }
           />
-
           <Route
             path="/matches"
             element={

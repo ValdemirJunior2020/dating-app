@@ -1,4 +1,4 @@
-// src/pages/Browse.jsx
+// src/pages/Browse.jsx  (fixed eslint: include `user` as a dependency)
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -31,13 +31,9 @@ function primaryPhotoFromDoc(user) {
   }
   return null;
 }
-
-function isHttpUrl(s) {
-  return typeof s === "string" && /^https?:\/\//i.test(s);
-}
-function isStoragePath(s) {
-  return typeof s === "string" && (s.startsWith("gs://") || (!s.startsWith("http") && s.includes("/")));
-}
+const isHttpUrl = (s) => typeof s === "string" && /^https?:\/\//i.test(s);
+const isStoragePath = (s) =>
+  typeof s === "string" && (s.startsWith("gs://") || (!s.startsWith("http") && s.includes("/")));
 
 function EduBadge({ v }) {
   return (
@@ -56,10 +52,6 @@ function Card({ meUid, meVerified, user }) {
   const toast = useToast();
   const [liking, setLiking] = useState(false);
 
-  // Resolve the primary photo with fallbacks:
-  // 1) user.photos[0] or user.photoURL
-  // 2) if storage path, getDownloadURL
-  // 3) /users/{uid}/public_photos (first, newest)
   const [photoUrl, setPhotoUrl] = useState(primaryPhotoFromDoc(user));
 
   useEffect(() => {
@@ -77,7 +69,7 @@ function Card({ meUid, meVerified, user }) {
           if (alive) setPhotoUrl(url);
           return;
         } catch {
-          // continue to subcollection fallback
+          // keep going
         }
       }
 
@@ -115,7 +107,7 @@ function Card({ meUid, meVerified, user }) {
     return () => {
       alive = false;
     };
-  }, [user?.id]);
+  }, [user]); // ✅ include `user` to satisfy eslint
 
   const hasPhoto = !!photoUrl;
   const peerVerified = isCollegeVerified(user);
@@ -126,7 +118,6 @@ function Card({ meUid, meVerified, user }) {
     if (!meUid || !user?.id) return;
     try {
       setLiking(true);
-      // sendLike expects only target uid in this codebase
       await sendLike(user.id);
       toast?.show
         ? toast.show({ title: "Liked", desc: `You liked ${name}.`, icon: "❤️" })
@@ -166,12 +157,10 @@ function Card({ meUid, meVerified, user }) {
         position: "relative",
       }}
     >
-      {/* corner badge */}
       <div style={{ position: "absolute", top: 10, left: 10 }}>
         <EduBadge v={peerVerified} />
       </div>
 
-      {/* circular photo (big) */}
       <div
         style={{
           width: 170,
@@ -194,12 +183,10 @@ function Card({ meUid, meVerified, user }) {
         />
       </div>
 
-      {/* name + age */}
       <div className="fw-bold mb-2" style={{ fontSize: 18 }}>
         {age ? `${name}, ${age}` : name}
       </div>
 
-      {/* actions (EduOnly is pass-through right now) */}
       <EduOnly canAct={meVerified} peerVerified={peerVerified} compact>
         <div className="d-flex justify-content-center gap-2">
           <button
@@ -295,8 +282,6 @@ export default function Browse() {
   return (
     <div className="container" style={{ padding: 16 }}>
       <h3 className="text-white fw-bold mb-3">Browse</h3>
-
-      {/* Removed the old "only college-verified can like/chat" warning since chat is free now */}
 
       {loading && <div className="text-white-50">Loading…</div>}
       {empty && <div className="text-white-50">No profiles to show yet.</div>}
