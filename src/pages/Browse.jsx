@@ -1,6 +1,6 @@
-// src/pages/Browse.jsx  (fixed eslint: include `user` as a dependency)
+// src/pages/Browse.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   collection,
   doc,
@@ -48,32 +48,31 @@ function EduBadge({ v }) {
 }
 
 function Card({ meUid, meVerified, user }) {
-  const nav = useNavigate();
   const toast = useToast();
   const [liking, setLiking] = useState(false);
 
   const [photoUrl, setPhotoUrl] = useState(primaryPhotoFromDoc(user));
 
   useEffect(() => {
-    let alive = true;
+    let cancelled = false;
 
     (async () => {
       let candidate = primaryPhotoFromDoc(user);
       if (candidate && isHttpUrl(candidate)) {
-        if (alive) setPhotoUrl(candidate);
+        if (!cancelled) setPhotoUrl(candidate);
         return;
       }
       if (candidate && isStoragePath(candidate)) {
         try {
           const url = await getDownloadURL(sRef(storage, candidate));
-          if (alive) setPhotoUrl(url);
+          if (!cancelled) setPhotoUrl(url);
           return;
         } catch {
-          // keep going
+          // continue to fallback
         }
       }
 
-      // Subcollection fallback: /users/{uid}/public_photos (newest first)
+      // Fallback: /users/{uid}/public_photos (newest first)
       try {
         const q = query(
           collection(db, "users", user.id, "public_photos"),
@@ -84,28 +83,28 @@ function Card({ meUid, meVerified, user }) {
         const doc0 = snap.docs[0];
         const urlField = doc0?.data()?.url;
         if (!urlField) {
-          if (alive) setPhotoUrl(null);
+          if (!cancelled) setPhotoUrl(null);
           return;
         }
         if (isHttpUrl(urlField)) {
-          if (alive) setPhotoUrl(urlField);
+          if (!cancelled) setPhotoUrl(urlField);
         } else if (isStoragePath(urlField)) {
           try {
             const url = await getDownloadURL(sRef(storage, urlField));
-            if (alive) setPhotoUrl(url);
+            if (!cancelled) setPhotoUrl(url);
           } catch {
-            if (alive) setPhotoUrl(null);
+            if (!cancelled) setPhotoUrl(null);
           }
         } else {
-          if (alive) setPhotoUrl(null);
+          if (!cancelled) setPhotoUrl(null);
         }
       } catch {
-        if (alive) setPhotoUrl(null);
+        if (!cancelled) setPhotoUrl(null);
       }
     })();
 
     return () => {
-      alive = false;
+      cancelled = true;
     };
   }, [user]); // ✅ include `user` to satisfy eslint
 
@@ -130,19 +129,6 @@ function Card({ meUid, meVerified, user }) {
     } finally {
       setLiking(false);
     }
-  }
-
-  function onSayHi() {
-    nav(`/chat/with/${user.id}`);
-  }
-
-  function enlarge() {
-    if (!hasPhoto) return;
-    const img = document.createElement("img");
-    img.setAttribute("data-enlarge", photoUrl);
-    document.body.appendChild(img);
-    img.click();
-    img.remove();
   }
 
   return (
@@ -173,13 +159,11 @@ function Card({ meUid, meVerified, user }) {
           boxShadow: "0 10px 28px rgba(0,0,0,.35)",
           cursor: hasPhoto ? "zoom-in" : "default",
         }}
-        onClick={enlarge}
       >
         <img
           src={hasPhoto ? photoUrl : PLACEHOLDER}
           alt={name}
           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          data-enlarge={hasPhoto ? photoUrl : undefined}
         />
       </div>
 
@@ -198,13 +182,13 @@ function Card({ meUid, meVerified, user }) {
             {liking ? "…" : "❤️ Like"}
           </button>
 
-          <button
+          <Link
+            to={`/chat/with/${user.id}`}
             className="btn btn-sm btn-warning fw-bold"
-            onClick={onSayHi}
             aria-label="Say hi"
           >
             Say hi
-          </button>
+          </Link>
 
           <Link
             to={`/u/${user.id}`}
@@ -227,52 +211,49 @@ export default function Browse() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // load my profile to know if I am college-verified (kept for future gating)
+  // load my profile to know if I am college-verified
   useEffect(() => {
-    let alive = true;
+    let cancelled = false;
     (async () => {
       if (!meUid) {
-        if (alive) setMe(null);
+        if (!cancelled) setMe(null);
         return;
       }
       try {
         const snap = await getDoc(doc(db, "users", meUid));
-        if (alive) setMe(snap.exists() ? { id: snap.id, ...snap.data() } : null);
-      } catch (e) {
-        console.error(e);
-        if (alive) setMe(null);
+        if (!cancelled) setMe(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+      } catch {
+        if (!cancelled) setMe(null);
       }
     })();
     return () => {
-      alive = false;
+      cancelled = true;
     };
   }, [meUid]);
 
   // load all users to browse
   useEffect(() => {
-    let alive = true;
+    let cancelled = false;
     (async () => {
       try {
         setLoading(true);
         const snap = await getDocs(collection(db, "users"));
         const list = [];
         snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-        // hide me only if there are others
         let filtered = list;
         if (meUid) {
           const withoutMe = list.filter((u) => u.id !== meUid);
           filtered = withoutMe.length > 0 ? withoutMe : list;
         }
-        if (alive) setUsers(filtered);
-      } catch (e) {
-        console.error(e);
-        if (alive) setUsers([]);
+        if (!cancelled) setUsers(filtered);
+      } catch {
+        if (!cancelled) setUsers([]);
       } finally {
-        if (alive) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
-      alive = false;
+      cancelled = true;
     };
   }, [meUid]);
 
