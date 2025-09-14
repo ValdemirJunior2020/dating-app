@@ -1,4 +1,6 @@
 // src/services/chat.js
+// Threads + messages with daily free-new-chat gating and inbox listeners.
+
 import {
   addDoc,
   collection,
@@ -7,137 +9,208 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
+  limit as qlimit,
+  increment,
 } from "firebase/firestore";
-import { auth, db } from "../firebase";
-import { consumeNewChatCreditOrThrow } from "./limits";
+import { db, auth } from "../firebase";
+import { isPremium, getFreeNewChatsPerDay, ymd } from "./limits";
 
-/** Normalize possible user inputs into a UID string */
-function normalizeUid(u) {
-  if (!u) return null;
-  if (typeof u === "string") return u;
-  if (typeof u === "object") return u.uid || u.id || u.userId || null;
-  return null;
+function uid() {
+  return auth?.currentUser?.uid || null;
+}
+function sortPair(a, b) {
+  return [a, b].sort();
+}
+function tidFor(a, b) {
+  const [x, y] = sortPair(a, b);
+  return `${x}_${y}`;
 }
 
-/** Deterministic thread id for a pair of UIDs */
-export function threadIdFor(uida, uidb) {
-  const [a, b] = [uida, uidb].sort();
-  return `${a}_${b}`;
+/** Find existing thread id for pair or null */
+async function findExistingThread(a, b) {
+  const [x, y] = sortPair(a, b);
+  const tid = tidFor(x, y);
+  const s = await getDoc(doc(db, "threads", tid));
+  return s.exists() ? tid : null;
 }
 
 /**
- * Ensure a thread exists between current user and the other user.
- * Enforces the "new chat per day" limit when creating a brand-new thread.
+ * Ensure a thread with peerUid.
+ * - If exists → returns tid
+ * - If not, enforces daily free-new-chat limit (unless premium), creates thread, increments meter
+ * Throws { code: "PAYWALL_REQUIRED", limit } if over the free limit.
  */
-export async function ensureThread(other) {
-  const me = auth.currentUser?.uid || null;
-  const otherUid = normalizeUid(other);
-  if (!me || !otherUid || otherUid === me) return null;
+export async function ensureThread(peerUid) {
+  const me = uid();
+  if (!me || !peerUid || me === peerUid) throw new Error("Invalid users");
 
-  const tid = threadIdFor(me, otherUid);
-  const tRef = doc(db, "threads", tid);
+  // Fast path: if already exists, return it (no meter impact)
+  const pre = await findExistingThread(me, peerUid);
+  if (pre) return pre;
 
-  // Does it already exist? If yes, just return without consuming a credit.
-  const existing = await getDoc(tRef);
-  if (existing.exists()) return tid;
+  // Premium users bypass the free limit (still create the thread safely)
+  const premium = await isPremium(me);
+  if (premium) {
+    const tid = tidFor(me, peerUid);
+    await runTransaction(db, async (tx) => {
+      const tRef = doc(db, "threads", tid);
+      const tSnap = await tx.get(tRef);
+      if (tSnap.exists()) return;
+      tx.set(tRef, {
+        users: sortPair(me, peerUid),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastMessageAt: null,
+        last: null,
+      });
+    });
+    return tid;
+  }
 
-  // Brand new conversation -> consume a daily credit (or throw paywall)
-  await consumeNewChatCreditOrThrow();
+  // Non-premium: atomically check today's meter + create the thread + increment meter
+  const tid = tidFor(me, peerUid);
+  const res = await runTransaction(db, async (tx) => {
+    const tRef = doc(db, "threads", tid);
+    const meterRef = doc(db, "meters", me, "daily", ymd());
+    const cfgRef = doc(db, "config", "app");
 
-  // Create the thread
-  await setDoc(
-    tRef,
-    {
-      users: [me, otherUid].sort(),
+    const [tSnap, mSnap, cSnap] = await Promise.all([
+      tx.get(tRef),
+      tx.get(meterRef),
+      tx.get(cfgRef),
+    ]);
+
+    if (tSnap.exists()) return { ok: true };
+
+    const limit = Number(
+      cSnap.exists() ? cSnap.data()?.freeNewChatsPerDay ?? 3 : 3
+    );
+    const count = mSnap.exists() ? Number(mSnap.data()?.count || 0) : 0;
+
+    if (count >= limit) return { ok: false, limit };
+
+    // Create thread
+    tx.set(tRef, {
+      users: sortPair(me, peerUid),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      lastMessageAt: serverTimestamp(),
-      last: {
-        from: me,
-        text: "",
-        at: serverTimestamp(),
-        readBy: { [me]: true },
-      },
-    },
-    { merge: false }
-  );
+      lastMessageAt: null,
+      last: null,
+    });
+
+    // Upsert today's meter
+    if (!mSnap.exists()) {
+      tx.set(meterRef, {
+        count: 1,
+        date: ymd(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      tx.update(meterRef, {
+        count: increment(1),
+        date: ymd(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    return { ok: true };
+  });
+
+  if (!res.ok) {
+    // Provide the limit value for the paywall modal
+    const limit = await getFreeNewChatsPerDay();
+    const err = new Error("Over free daily new chat limit");
+    err.code = "PAYWALL_REQUIRED";
+    err.limit = limit;
+    throw err;
+  }
 
   return tid;
 }
 
-/**
- * Send a message within a thread.
- * Also updates thread.last for read receipts and preview.
- */
-export async function sendMessage(tid, text) {
-  const me = auth.currentUser?.uid || null;
-  if (!me || !tid) return;
+/** Subscribe to thread messages (ascending by createdAt) */
+export function listenMessages(tid, cb) {
+  const q = query(
+    collection(db, "threads", tid, "messages"),
+    orderBy("createdAt", "asc"),
+    qlimit(200)
+  );
+  return onSnapshot(q, (snap) => {
+    const list = [];
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+    cb(list);
+  });
+}
 
-  const clean = String(text ?? "").trim();
+/** Subscribe to thread metadata (last message, timestamps) */
+export function listenThreadMeta(tid, cb) {
+  const ref = doc(db, "threads", tid);
+  return onSnapshot(ref, (snap) => {
+    cb(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+  });
+}
+
+/** Inbox: subscribe to all threads for a user (ordered by recent activity) */
+export function listenThreadsForUser(userUid, cb, limitCount = 50) {
+  if (!userUid) return () => {};
+  const q = query(
+    collection(db, "threads"),
+    where("users", "array-contains", userUid),
+    orderBy("updatedAt", "desc"),
+    qlimit(limitCount)
+  );
+  return onSnapshot(q, (snap) => {
+    const list = [];
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+    cb(list);
+  });
+}
+
+/** Send a message and update thread's last/timestamps */
+export async function sendMessage(tid, text) {
+  const me = uid();
+  if (!me) throw new Error("Not signed in");
+  const clean = String(text || "").trim();
   if (!clean) return;
 
-  await addDoc(collection(db, "threads", tid, "messages"), {
-    from: me,
-    text: clean,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  const tRef = doc(db, "threads", tid);
+  const mCol = collection(tRef, "messages");
 
-  await updateDoc(doc(db, "threads", tid), {
-    updatedAt: serverTimestamp(),
-    lastMessageAt: serverTimestamp(),
-    last: {
+  await runTransaction(db, async (tx) => {
+    // create message
+    const msgRef = await addDoc(mCol, {
       from: me,
       text: clean,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    // update thread meta
+    const last = {
+      id: msgRef.id,
+      text: clean,
+      from: me,
       at: serverTimestamp(),
       readBy: { [me]: true },
-    },
+    };
+    tx.update(tRef, {
+      updatedAt: serverTimestamp(),
+      lastMessageAt: serverTimestamp(),
+      last,
+    });
   });
 }
 
-export async function markThreadRead(tid, uid) {
-  if (!tid || !uid) return;
-  await updateDoc(doc(db, "threads", tid), {
-    updatedAt: serverTimestamp(),
-    [`last.readBy.${uid}`]: true,
-  });
-}
-
-export async function sendMessageTo(other, text) {
-  const tid = await ensureThread(other);
-  if (!tid) return null;
-  await sendMessage(tid, text);
-  return tid;
-}
-
-export function listenMessages(tid, cb) {
-  if (!tid) return () => {};
-  const c = collection(db, "threads", tid, "messages");
-  const qy = query(c, orderBy("createdAt", "asc"));
-  return onSnapshot(qy, (snap) => {
-    const out = [];
-    snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
-    cb(out);
-  });
-}
-
-export function listenThreadMeta(tid, cb) {
-  if (!tid) return () => {};
+/** Mark thread last message as read by uid */
+export async function markThreadRead(tid, readerUid) {
+  if (!tid || !readerUid) return;
   const tRef = doc(db, "threads", tid);
-  return onSnapshot(tRef, (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null));
-}
-
-export function listenThreadsForUser(uid, cb) {
-  if (!uid) return () => {};
-  const tCol = collection(db, "threads");
-  const qy = query(tCol, where("users", "array-contains", uid));
-  return onSnapshot(qy, (snap) => {
-    const out = [];
-    snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
-    cb(out);
-  });
+  await updateDoc(tRef, {
+    [`last.readBy.${readerUid}`]: true,
+  }).catch(() => {});
 }
