@@ -1,6 +1,28 @@
+# netlify.toml
+
 [build]
   command = "npm run build"
   publish = "build"
 
-[functions]
-  directory = "netlify/functions"
+# Stripe Checkout → Netlify Function
+[[redirects]]
+  from = "/createCheckoutSession"
+  to = "/.netlify/functions/create-checkout-session"
+  status = 200
+
+# (keep your other redirects)
+[[redirects]]
+  from = "/sendEduOtp"
+  to = "https://us-central1-review-45013.cloudfunctions.net/sendEduOtp"
+  status = 200
+
+[[redirects]]
+  from = "/verifyEduOtp"
+  to = "https://us-central1-review-45013.cloudfunctions.net/verifyEduOtp"
+  status = 200
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
