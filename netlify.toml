@@ -4,13 +4,19 @@
   command = "npm run build"
   publish = "build"
 
-# Stripe Checkout → Netlify Function
+# Stripe Checkout → Firebase Function (or switch to Netlify function if you used that)
 [[redirects]]
   from = "/createCheckoutSession"
-  to = "/.netlify/functions/create-checkout-session"
+  to = "https://us-central1-review-45013.cloudfunctions.net/createCheckoutSession"
   status = 200
 
-# (keep your other redirects)
+# Stripe Customer Portal → Firebase Function
+[[redirects]]
+  from = "/createPortalSession"
+  to = "https://us-central1-review-45013.cloudfunctions.net/createPortalSession"
+  status = 200
+
+# .edu OTP endpoints (keep)
 [[redirects]]
   from = "/sendEduOtp"
   to = "https://us-central1-review-45013.cloudfunctions.net/sendEduOtp"

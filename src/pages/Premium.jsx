@@ -4,7 +4,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../firebase";
 import { getFreeNewChatsPerDay, ymd } from "../services/limits";
-import { checkout, getStripeConfig } from "../services/stripe";
+import { checkout, getStripeConfig, isBillingEnabled, openPortal } from "../services/stripe";
 
 export default function Premium() {
   const { user } = useAuth() || {};
@@ -12,18 +12,22 @@ export default function Premium() {
 
   const [limit, setLimit] = useState(3);
   const [count, setCount] = useState(0);
-  const [cfg, setCfg] = useState(null);
+  const [cfg, setCfg] = useState({ billingEnabled: false });
   const [busy, setBusy] = useState(false);
+  const [portalBusy, setPortalBusy] = useState(false);
 
   useEffect(() => {
     let stop = false;
     (async () => {
-      const v = await getFreeNewChatsPerDay();
-      if (!stop) setLimit(v);
-      const c = await getStripeConfig();
-      if (!stop) setCfg(c);
+      const [lim, conf] = await Promise.all([getFreeNewChatsPerDay(), getStripeConfig()]);
+      if (!stop) {
+        setLimit(lim);
+        setCfg(conf);
+      }
     })();
-    return () => { stop = true; };
+    return () => {
+      stop = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -45,11 +49,45 @@ export default function Premium() {
     if (busy) return;
     try {
       setBusy(true);
-      await checkout(plan); // 'monthly' or 'yearly'
+      const enabled = await isBillingEnabled();
+      if (!enabled) {
+        alert("Billing is not enabled yet. Please check back soon!");
+        return;
+      }
+      await checkout(plan); // 'monthly' | 'yearly'
+    } catch (e) {
+      if (e?.code === "BILLING_DISABLED") {
+        alert("Billing is not enabled yet. Please check back soon!");
+      } else {
+        alert(e?.message || String(e));
+      }
     } finally {
       setBusy(false);
     }
   }
+
+  async function manage() {
+    if (portalBusy) return;
+    try {
+      setPortalBusy(true);
+      const enabled = await isBillingEnabled();
+      if (!enabled) {
+        alert("Billing is not enabled yet. Please check back soon!");
+        return;
+      }
+      await openPortal();
+    } catch (e) {
+      if (e?.code === "BILLING_DISABLED") {
+        alert("Billing is not enabled yet. Please check back soon!");
+      } else {
+        alert(e?.message || String(e));
+      }
+    } finally {
+      setPortalBusy(false);
+    }
+  }
+
+  const disabled = !cfg.billingEnabled;
 
   return (
     <div className="container py-3">
@@ -74,6 +112,13 @@ export default function Premium() {
         </div>
       </div>
 
+      {disabled && (
+        <div className="alert alert-warning">
+          <strong>Coming soon:</strong> Billing isn’t enabled yet. You can still use the app; upgrades
+          will open once payment is configured.
+        </div>
+      )}
+
       <div className="row g-3">
         <div className="col-12 col-lg-6">
           <div className="card shadow-sm h-100">
@@ -89,8 +134,8 @@ export default function Premium() {
               <button
                 className="btn btn-primary fw-bold mt-auto"
                 onClick={() => go("monthly")}
-                disabled={busy || !cfg?.priceMonthly}
-                title={!cfg?.priceMonthly ? "Missing Stripe config" : "Upgrade monthly"}
+                disabled={busy || disabled || !cfg?.priceMonthly}
+                title={disabled ? "Billing not enabled yet" : (!cfg?.priceMonthly ? "Missing Monthly price" : "Upgrade monthly")}
               >
                 {busy ? "Redirecting…" : "Upgrade monthly"}
               </button>
@@ -101,7 +146,9 @@ export default function Premium() {
         <div className="col-12 col-lg-6">
           <div className="card shadow-sm h-100 border-primary">
             <div className="card-body d-flex flex-column">
-              <h5 className="fw-bold">Yearly <span className="badge bg-primary">Best value</span></h5>
+              <h5 className="fw-bold">
+                Yearly <span className="badge bg-primary">Best value</span>
+              </h5>
               <p className="text-muted small">Save more with an annual plan.</p>
               <ul className="text-muted small mb-3">
                 <li>All monthly features</li>
@@ -111,8 +158,8 @@ export default function Premium() {
               <button
                 className="btn btn-primary fw-bold mt-auto"
                 onClick={() => go("yearly")}
-                disabled={busy || !cfg?.priceYearly}
-                title={!cfg?.priceYearly ? "Missing Stripe config" : "Upgrade yearly"}
+                disabled={busy || disabled || !cfg?.priceYearly}
+                title={disabled ? "Billing not enabled yet" : (!cfg?.priceYearly ? "Missing Yearly price" : "Upgrade yearly")}
               >
                 {busy ? "Redirecting…" : "Upgrade yearly"}
               </button>
@@ -121,8 +168,26 @@ export default function Premium() {
         </div>
       </div>
 
+      {/* Manage subscription */}
+      <div className="card shadow-sm mt-3">
+        <div className="card-body d-flex align-items-center justify-content-between">
+          <div>
+            <div className="fw-bold">Manage subscription</div>
+            <div className="text-muted small">Open your Stripe customer portal.</div>
+          </div>
+          <button
+            className="btn btn-outline-secondary"
+            onClick={manage}
+            disabled={portalBusy || disabled}
+            title={disabled ? "Billing not enabled yet" : "Open customer portal"}
+          >
+            {portalBusy ? "Opening…" : "Open portal"}
+          </button>
+        </div>
+      </div>
+
       <div className="text-muted small mt-3">
-        Powered by Stripe. You can cancel anytime from your Stripe customer portal.
+        You can cancel anytime from the customer portal.
       </div>
     </div>
   );
