@@ -50,9 +50,13 @@ function PresenceTicker() {
   useEffect(() => {
     if (!user?.uid) return;
 
-    setOnline(true); // go online immediately
+    // go online immediately
+    setOnline(true);
+
+    // pulse every 30s
     const iv = setInterval(() => pulsePresence(), 30_000);
 
+    // pulse when tab becomes visible again
     const onVis = () => {
       if (document.visibilityState === "visible") pulsePresence();
     };
@@ -62,7 +66,7 @@ function PresenceTicker() {
       clearInterval(iv);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [user?.uid]);
+  }, [user?.uid]); // depend on uid
 
   return null;
 }
@@ -121,7 +125,7 @@ export default function App() {
             }
           />
 
-          {/* Chat */}
+          {/* Chat (support multiple param names for safety) */}
           <Route
             path="/chat"
             element={
@@ -173,7 +177,7 @@ export default function App() {
             }
           />
 
-          {/* Premium (plans/usage) */}
+          {/* Premium (Upgrade & Portal) */}
           <Route
             path="/premium"
             element={
@@ -183,7 +187,6 @@ export default function App() {
             }
           />
 
-          {/* Settings & extras */}
           <Route
             path="/settings"
             element={
@@ -192,6 +195,8 @@ export default function App() {
               </RequireAuth>
             }
           />
+
+          {/* Extras */}
           <Route
             path="/discover"
             element={
