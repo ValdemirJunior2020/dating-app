@@ -3,6 +3,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -12,6 +13,7 @@ import {
   where,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { consumeNewChatCreditOrThrow } from "./limits";
 
 /** Normalize possible user inputs into a UID string */
 function normalizeUid(u) {
@@ -29,7 +31,7 @@ export function threadIdFor(uida, uidb) {
 
 /**
  * Ensure a thread exists between current user and the other user.
- * Writes only the keys allowed by rules on create.
+ * Enforces the "new chat per day" limit when creating a brand-new thread.
  */
 export async function ensureThread(other) {
   const me = auth.currentUser?.uid || null;
@@ -39,27 +41,31 @@ export async function ensureThread(other) {
   const tid = threadIdFor(me, otherUid);
   const tRef = doc(db, "threads", tid);
 
-  try {
-    await setDoc(
-      tRef,
-      {
-        users: [me, otherUid].sort(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastMessageAt: serverTimestamp(),
-        // Optional seed; empty last object avoids null checks
-        last: {
-          from: me,
-          text: "",
-          at: serverTimestamp(),
-          readBy: { [me]: true },
-        },
+  // Does it already exist? If yes, just return without consuming a credit.
+  const existing = await getDoc(tRef);
+  if (existing.exists()) return tid;
+
+  // Brand new conversation -> consume a daily credit (or throw paywall)
+  await consumeNewChatCreditOrThrow();
+
+  // Create the thread
+  await setDoc(
+    tRef,
+    {
+      users: [me, otherUid].sort(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastMessageAt: serverTimestamp(),
+      last: {
+        from: me,
+        text: "",
+        at: serverTimestamp(),
+        readBy: { [me]: true },
       },
-      { merge: false }
-    );
-  } catch (_e) {
-    // If doc exists or update is denied, we still proceed with tid.
-  }
+    },
+    { merge: false }
+  );
+
   return tid;
 }
 
@@ -74,7 +80,6 @@ export async function sendMessage(tid, text) {
   const clean = String(text ?? "").trim();
   if (!clean) return;
 
-  // 1) Create the message
   await addDoc(collection(db, "threads", tid, "messages"), {
     from: me,
     text: clean,
@@ -82,7 +87,6 @@ export async function sendMessage(tid, text) {
     updatedAt: serverTimestamp(),
   });
 
-  // 2) Update thread meta (+ last)
   await updateDoc(doc(db, "threads", tid), {
     updatedAt: serverTimestamp(),
     lastMessageAt: serverTimestamp(),
@@ -90,23 +94,19 @@ export async function sendMessage(tid, text) {
       from: me,
       text: clean,
       at: serverTimestamp(),
-      // sender has implicitly "read"
       readBy: { [me]: true },
     },
   });
 }
 
-/** Mark the thread's last message as read by uid */
 export async function markThreadRead(tid, uid) {
   if (!tid || !uid) return;
   await updateDoc(doc(db, "threads", tid), {
     updatedAt: serverTimestamp(),
-    // dot-notation to set read flag for this uid
     [`last.readBy.${uid}`]: true,
   });
 }
 
-/** Ensure a thread (if needed) and send the message */
 export async function sendMessageTo(other, text) {
   const tid = await ensureThread(other);
   if (!tid) return null;
@@ -114,7 +114,6 @@ export async function sendMessageTo(other, text) {
   return tid;
 }
 
-/** Listen to messages for a thread (ascending by createdAt) */
 export function listenMessages(tid, cb) {
   if (!tid) return () => {};
   const c = collection(db, "threads", tid, "messages");
@@ -126,14 +125,12 @@ export function listenMessages(tid, cb) {
   });
 }
 
-/** Listen to thread meta (to read `last`, `lastMessageAt`, etc.) */
 export function listenThreadMeta(tid, cb) {
   if (!tid) return () => {};
   const tRef = doc(db, "threads", tid);
   return onSnapshot(tRef, (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null));
 }
 
-/** Listen to all threads for a user (inbox) */
 export function listenThreadsForUser(uid, cb) {
   if (!uid) return () => {};
   const tCol = collection(db, "threads");

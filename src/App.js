@@ -27,6 +27,7 @@ import Report from "./pages/Report";
 // New pages
 import Messages from "./pages/Messages";
 import Likes from "./pages/Likes";
+import Premium from "./pages/Premium"; // ← NEW
 
 // Toaster + daily streak hook
 import { ToasterProvider } from "./components/Toaster";
@@ -49,13 +50,9 @@ function PresenceTicker() {
   useEffect(() => {
     if (!user?.uid) return;
 
-    // go online immediately
-    setOnline(true);
-
-    // pulse every 30s
+    setOnline(true); // go online immediately
     const iv = setInterval(() => pulsePresence(), 30_000);
 
-    // pulse when tab becomes visible again
     const onVis = () => {
       if (document.visibilityState === "visible") pulsePresence();
     };
@@ -65,7 +62,7 @@ function PresenceTicker() {
       clearInterval(iv);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [user?.uid]); // ✅ depend on uid; fixes eslint warning
+  }, [user?.uid]);
 
   return null;
 }
@@ -124,7 +121,7 @@ export default function App() {
             }
           />
 
-          {/* Chat (support multiple param names for safety) */}
+          {/* Chat */}
           <Route
             path="/chat"
             element={
@@ -176,6 +173,17 @@ export default function App() {
             }
           />
 
+          {/* Premium (plans/usage) */}
+          <Route
+            path="/premium"
+            element={
+              <RequireAuth>
+                <Premium />
+              </RequireAuth>
+            }
+          />
+
+          {/* Settings & extras */}
           <Route
             path="/settings"
             element={
@@ -184,8 +192,6 @@ export default function App() {
               </RequireAuth>
             }
           />
-
-          {/* Extras */}
           <Route
             path="/discover"
             element={
