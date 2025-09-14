@@ -13,6 +13,6 @@
     "dotenv": "^16.4.5",
     "firebase-admin": "^11.10.1",
     "firebase-functions": "^4.4.1",
-     "stripe": "^14.22.0"
+     "stripe": "^18.5.0"
   }
 }

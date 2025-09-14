@@ -1,65 +1,56 @@
 // netlify/functions/create-checkout-session.js
-// Server-side Stripe Checkout creator for Netlify Functions
+// Requires env var STRIPE_SECRET_KEY set in Netlify site settings
 
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const Stripe = require("stripe");
 
-/** Helper to pick a base URL for redirects */
-function getBaseUrl(eventBody) {
-  try {
-    const body = JSON.parse(eventBody || "{}");
-    if (body.successUrl) return new URL(body.successUrl).origin;
-  } catch (_) {}
-  return (
-    process.env.APP_PUBLIC_URL ||
-    process.env.APP_URL ||
-    process.env.URL || // Netlify site URL
-    "http://localhost:8888"
-  );
+function addCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
   try {
-    const body = JSON.parse(event.body || "{}");
-
-    // Accept price from body or fall back to env
-    const priceId =
-      body.priceId ||
-      process.env.COLLEGE_PRICE_ID || // your env fallback
-      null;
-
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return { statusCode: 500, body: "Missing STRIPE_SECRET_KEY" };
+    addCors({
+      setHeader: (k, v) => (event.multiValueHeaders ??= {}, event.headers ??= {}, null),
+    });
+    if (event.httpMethod === "OPTIONS") {
+      return { statusCode: 204, headers: { "Access-Control-Allow-Origin": "*" }, body: "" };
     }
+    if (event.httpMethod !== "POST") {
+      return { statusCode: 405, headers: { "Access-Control-Allow-Origin": "*" }, body: "Use POST" };
+    }
+
+    const secret = process.env.STRIPE_SECRET_KEY;
+    if (!secret) {
+      return { statusCode: 500, headers: { "Access-Control-Allow-Origin": "*" }, body: "Missing STRIPE_SECRET_KEY" };
+    }
+
+    const payload = JSON.parse(event.body || "{}");
+    const { priceId, successUrl, cancelUrl } = payload;
     if (!priceId) {
-      return { statusCode: 400, body: "Missing priceId" };
+      return { statusCode: 400, headers: { "Access-Control-Allow-Origin": "*" }, body: "Missing priceId" };
     }
 
-    const mode = body.mode || "subscription"; // or 'payment'
-    const base = getBaseUrl(event.body);
-    const successUrl = body.successUrl || `${base}/premium?ok=1&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = body.cancelUrl || `${base}/premium?canceled=1`;
-
+    const stripe = new Stripe(secret);
     const session = await stripe.checkout.sessions.create({
-      mode,
+      mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: successUrl,
-      cancel_url: cancelUrl,
       allow_promotion_codes: true,
-      // Optional: identify the user or build webhooks later
-      // client_reference_id: body.uid || undefined,
+      success_url: successUrl || `${process.env.APP_URL || "https://example.com"}/premium?ok=1`,
+      cancel_url: cancelUrl || `${process.env.APP_URL || "https://example.com"}/premium?canceled=1`,
     });
 
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: session.url, id: session.id }),
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ url: session.url }),
     };
   } catch (err) {
-    console.error(err);
-    return { statusCode: 500, body: `Error: ${err.message || err}` };
-    }
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*" },
+      body: `Checkout error: ${err.message || String(err)}`,
+    };
+  }
 };
