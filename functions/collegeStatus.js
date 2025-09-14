@@ -18,7 +18,7 @@ exports.tagCollegeOnCreate = functions.auth.user().onCreate(async (user) => {
 
     const doc = await db.collection("verifiedEduEmails").doc(email).get();
     if (!doc.exists) {
-      // Not verified via OTP (yet). You can add a “sync later” flow if needed.
+      // Not verified via OTP (yet).
       return;
     }
 

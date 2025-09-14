@@ -1,9 +1,7 @@
 {
   "name": "functions",
   "private": true,
-  "engines": {
-    "node": "20"
-  },
+  "engines": { "node": "20" },
   "scripts": {
     "lint": "echo Skipping lint",
     "serve": "firebase emulators:start --only functions",

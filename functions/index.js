@@ -45,16 +45,16 @@ async function getUserDocWithEmail(uid) {
 function prefs(user) {
   return {
     email: user.email || null,
-    emailOptIn: user.emailOptIn !== false,  // default true
+    emailOptIn: user.emailOptIn !== false, // default true
     notifyOnLike: user.notifyOnLike !== false,
-    notifyOnMatch: user.notifyOnMatch !== false
+    notifyOnMatch: user.notifyOnMatch !== false,
   };
 }
 
 function canEmail(user, type) {
   const p = prefs(user);
   if (!SENDGRID_API_KEY || !p.emailOptIn || !p.email) return false;
-  if (type === "like")  return p.notifyOnLike;
+  if (type === "like") return p.notifyOnLike;
   if (type === "match") return p.notifyOnMatch;
   return false;
 }
@@ -75,7 +75,7 @@ function likeTemplate({ likerName }) {
         <p>Open the app to see who and like them back.</p>
         <p><a href="${url}" style="background:#ff9e2c;color:#1a0f07;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:700">View likes</a></p>
         <p style="font-size:12px;color:#666">Manage your notifications in Settings.</p>
-      </div>`
+      </div>`,
   };
 }
 
@@ -89,7 +89,7 @@ function matchTemplate({ otherName, otherUid }) {
         <p>Say hi and keep the spark going.</p>
         <p><a href="${url}" style="background:#ff9e2c;color:#1a0f07;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:700">Open chat</a></p>
         <p style="font-size:12px;color:#666">Manage your notifications in Settings.</p>
-      </div>`
+      </div>`,
   };
 }
 
@@ -124,14 +124,13 @@ async function handleLikeEvent(event, sourceKey) {
   const { toUid, fromUid } = parseLike(doc, event.params || {});
   if (!toUid || !fromUid || toUid === fromUid) return;
 
-  // Robust de-dupe: use the path of the created doc
   const path = event.data.ref?.path || `${sourceKey}/${Date.now()}`;
   const dedupeKey = `like:${path}`;
   if (!(await once(dedupeKey))) return;
 
   const [toUser, fromUser] = await Promise.all([
     getUserDocWithEmail(toUid),
-    getUserDocWithEmail(fromUid)
+    getUserDocWithEmail(fromUid),
   ]);
 
   const likerName = fromUser?.displayName || fromUser?.name || "Someone";
@@ -154,7 +153,7 @@ exports.likeCreatedUserSub = onDocumentCreated("users/{uid}/likes/{likeId}", asy
 async function notifyMatchFor(recipientUid, otherUid) {
   const [recip, other] = await Promise.all([
     getUserDocWithEmail(recipientUid),
-    getUserDocWithEmail(otherUid)
+    getUserDocWithEmail(otherUid),
   ]);
   const otherName = other?.displayName || other?.name || "your match";
 
@@ -174,10 +173,7 @@ async function handleMatchEvent(event, sourceKey) {
   const dedupeKey = `match:${path}`;
   if (!(await once(dedupeKey))) return;
 
-  await Promise.all([
-    notifyMatchFor(u1, u2),
-    notifyMatchFor(u2, u1)
-  ]);
+  await Promise.all([notifyMatchFor(u1, u2), notifyMatchFor(u2, u1)]);
 }
 
 exports.matchCreatedTop = onDocumentCreated("matches/{matchId}", async (event) =>
@@ -187,3 +183,9 @@ exports.matchCreatedTop = onDocumentCreated("matches/{matchId}", async (event) =
 exports.matchCreatedUserSub = onDocumentCreated("users/{uid}/matches/{matchId}", async (event) =>
   handleMatchEvent(event, "usersMatches")
 );
+
+// ---------- bring in all other modules ----------
+Object.assign(exports, require("./adminSeed"));     // seedInitialAdmin
+Object.assign(exports, require("./collegeStatus")); // tagCollegeOnCreate
+Object.assign(exports, require("./edu"));           // sendEduOtp, verifyEduOtp
+Object.assign(exports, require("./stripe"));        // createCheckoutSession, createPortalSession
