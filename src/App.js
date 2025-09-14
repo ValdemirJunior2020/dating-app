@@ -1,5 +1,6 @@
 // src/App.js
 import React, { useEffect } from "react";
+import Profile from "./pages/Profile";
 import { Routes, Route } from "react-router-dom";
 
 import NavBar from "./components/NavBar";
@@ -183,6 +184,16 @@ export default function App() {
             element={
               <RequireAuth>
                 <Premium />
+              </RequireAuth>
+            }
+          />
+
+          {/* Profile editor (NEW) */}
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <Profile />
               </RequireAuth>
             }
           />

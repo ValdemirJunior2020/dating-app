@@ -1,7 +1,20 @@
 // src/services/users.js
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,                 // ← added
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "../firebase";
-import cleanPhotos from "../utils/cleanPhotos"; // keep if you have it; we also guard below
+import cleanPhotos from "../utils/cleanPhotos"; // keep if you have it; safely guarded below
 
 /** Return an array of photo URLs from userDoc (photos[] or photoURL) */
 function photosFrom(userDoc) {
@@ -92,4 +105,82 @@ export async function setUserPhoneAndPrefs(uid, phone, prefs = {}) {
   if (phone) payload.phone = String(phone);
   if (prefs && typeof prefs === "object") payload.notificationPrefs = { ...prefs };
   await setDoc(doc(db, "users", uid), payload, { merge: true });
+}
+
+/* ---------- Profile editing + gallery helpers ---------- */
+
+/** Alias to read my profile (same as getUserProfile) */
+export async function getMyProfile(uid) {
+  return getUserProfile(uid);
+}
+
+/**
+ * Update allowed fields on users/{uid}.
+ * Matches your Firestore rules:
+ * - Only specific keys
+ * - updatedAt must equal request.time (we use serverTimestamp())
+ * - Do NOT touch createdAt here
+ */
+export async function updateMyProfile(uid, partial) {
+  if (!uid) throw new Error("Missing uid");
+
+  const allowed = [
+    "displayName",
+    "bio",
+    "photoURL",
+    "gender",
+    "school",
+    "age",
+    "collegeVerified", // typically admin-controlled; included for completeness
+  ];
+
+  const clean = {};
+  for (const k of allowed) {
+    if (k in partial && partial[k] !== undefined) clean[k] = partial[k];
+  }
+  clean.updatedAt = serverTimestamp();
+
+  await updateDoc(doc(db, "users", uid), clean);
+}
+
+/** Listen to my public photos subcollection (newest first) */
+export function listenMyPublicPhotos(uid, cb) {
+  if (!uid) return () => {};
+  const q = query(collection(db, "users", uid, "public_photos"), orderBy("createdAt", "desc"));
+  return onSnapshot(q, (snap) => {
+    const list = [];
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+    cb(list);
+  });
+}
+
+/**
+ * Add a public photo document.
+ * Rules expect: { owner, url, createdAt, updatedAt, caption? }
+ * caption is optional and max 140 chars.
+ */
+export async function addPublicPhoto(uid, url, caption = "") {
+  if (!uid || !url) throw new Error("Missing uid or url");
+  const ref = collection(db, "users", uid, "public_photos");
+  const payload = {
+    owner: uid,
+    url: String(url),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  const cleanCaption = String(caption || "").trim();
+  if (cleanCaption) payload.caption = cleanCaption.slice(0, 140);
+  await addDoc(ref, payload);
+}
+
+/** Set main profile photo (updates users/{uid}.photoURL + updatedAt) */
+export async function setMainPhoto(uid, url) {
+  if (!uid || !url) throw new Error("Missing uid or url");
+  await updateMyProfile(uid, { photoURL: String(url) });
+}
+
+/** Remove photo doc from gallery (does not delete Storage file) */
+export async function deletePublicPhotoDoc(uid, pid) {
+  if (!uid || !pid) throw new Error("Missing uid or photo id");
+  await deleteDoc(doc(db, "users", uid, "public_photos", pid));
 }
