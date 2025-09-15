@@ -21,19 +21,18 @@ export default function NavBar() {
   const auth = useAuth() || {};
   const user = auth.currentUser || auth.user || null;
 
-  // Public folder image path (works in CRA/Vite): "/logo.png"
-  const logoSrc = "/logo.png"; // file at public/logo.png
+  const logoSrc = "/logo.png";
 
   return (
     <nav className="navbar navbar-expand-md navbar-light border-bottom">
       <div className="container">
-        {/* Brand (logo + text) */}
+        {/* Brand */}
         <Link className="navbar-brand brand-cursive d-flex align-items-center" to="/">
           <img src={logoSrc} alt="Candle Love logo" />
           <span>Candle Love</span>
         </Link>
 
-        {/* Mobile toggler (opens offcanvas) */}
+        {/* Mobile toggler */}
         <button
           className="navbar-toggler d-md-none"
           type="button"
@@ -58,6 +57,8 @@ export default function NavBar() {
                   <li className="nav-item"><NavLink className="nav-link" to="/browse">Browse</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/matches">Matches</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/chat">Chat</NavLink></li>
+                  {/* NEW: Profile */}
+                  <li className="nav-item"><NavLink className="nav-link" to="/profile">Profile</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/settings">Settings</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/discover">Discover</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/profile/interests">Interests</NavLink></li>
@@ -65,10 +66,18 @@ export default function NavBar() {
                   {/* User chip + logout */}
                   <li className="nav-item d-flex align-items-center">
                     <div className="user-chip">
-                      <div className="avatar" title={user?.email || ""}>
-                        <span className="initial">{initialFrom(user)}</span>
+                      <Link to="/profile" className="avatar" title={user?.email || ""}>
+                        {user?.photoURL ? (
+                          <img
+                            src={user.photoURL}
+                            alt="me"
+                            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+                          />
+                        ) : (
+                          <span className="initial">{initialFrom(user)}</span>
+                        )}
                         <span className="online" />
-                      </div>
+                      </Link>
                       <div className="user-text d-none d-lg-block">
                         <div className="hello">Hi,</div>
                         <div className="name">{firstNameFrom(user)}</div>
@@ -110,6 +119,8 @@ export default function NavBar() {
                   <li className="nav-item"><NavLink className="nav-link" to="/browse" data-bs-dismiss="offcanvas">Browse</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/matches" data-bs-dismiss="offcanvas">Matches</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/chat" data-bs-dismiss="offcanvas">Chat</NavLink></li>
+                  {/* NEW: Profile (mobile) */}
+                  <li className="nav-item"><NavLink className="nav-link" to="/profile" data-bs-dismiss="offcanvas">Profile</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/settings" data-bs-dismiss="offcanvas">Settings</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/discover" data-bs-dismiss="offcanvas">Discover</NavLink></li>
                   <li className="nav-item"><NavLink className="nav-link" to="/profile/interests" data-bs-dismiss="offcanvas">Interests</NavLink></li>

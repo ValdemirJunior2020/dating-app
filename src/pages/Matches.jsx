@@ -1,149 +1,118 @@
 // src/pages/Matches.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { collection, onSnapshot, query, where, doc, getDoc } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../context/AuthContext";
-import useUnreadByPeer from "../hooks/useUnreadByPeer";
-import UnreadDot from "../components/UnreadDot";
+import { listenThreadsForUser } from "../services/chat";
 
-const PLACEHOLDER = "/logo.png";
+function lastPreview(t) {
+  const txt = t?.last?.text || "";
+  return txt.length > 80 ? txt.slice(0, 80) + "…" : txt;
+}
 
-function firstPhotoFrom(user) {
-  const arr = Array.isArray(user?.photos) ? user.photos : [];
-  const first = arr.find((u) => typeof u === "string" && u.length > 6);
-  return first || user?.photoURL || null;
+function isUnreadForMe(t, myUid) {
+  const last = t?.last;
+  if (!last) return false;
+  if (last.from === myUid) return false;
+  const rb = last.readBy || {};
+  return !rb[myUid];
 }
 
 export default function Matches() {
-  const auth = useAuth() || {};
-  const meUid = auth.currentUser?.uid || auth.user?.uid || null;
-  const unreadByPeer = useUnreadByPeer(meUid);
-
-  const [rows, setRows] = useState([]); // [{id, users:[a,b]}]
-  const [profiles, setProfiles] = useState({}); // { uid: userDoc }
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth() || {};
+  const myUid = user?.uid || null;
   const nav = useNavigate();
 
-  // subscribe to my matches
-  useEffect(() => {
-    if (!meUid) return;
-    const qy = query(collection(db, "matches"), where("users", "array-contains", meUid));
-    const unsub = onSnapshot(
-      qy,
-      (snap) => {
-        const out = [];
-        snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
-        setRows(out);
-        setLoading(false);
-      },
-      () => setLoading(false)
-    );
-    return () => unsub();
-  }, [meUid]);
+  const [threads, setThreads] = useState([]);
+  const [peers, setPeers] = useState({}); // uid -> {id, ...user}
+  const [loading, setLoading] = useState(true);
 
-  // fetch peer profiles
+  // Subscribe to my threads inbox (ordered by updatedAt desc)
   useEffect(() => {
-    let alive = true;
+    if (!myUid) return;
+    setLoading(true);
+    const unsub = listenThreadsForUser(myUid, (list) => {
+      setThreads(list || []);
+      setLoading(false);
+    });
+    return unsub;
+  }, [myUid]);
+
+  // Fetch missing peer profiles for visible threads (simple cache)
+  useEffect(() => {
+    if (!myUid || threads.length === 0) return;
+
+    const missing = new Set();
+    for (const t of threads) {
+      const other = (t.users || []).find((u) => u !== myUid);
+      if (other && !peers[other]) missing.add(other);
+    }
+    if (missing.size === 0) return;
+
     (async () => {
-      const need = new Set();
-      rows.forEach((m) => {
-        const other = Array.isArray(m.users) ? m.users.find((u) => u !== meUid) : null;
-        if (other) need.add(other);
-      });
-      const next = {};
+      const updates = {};
       await Promise.all(
-        [...need].map(async (uid) => {
-          const uRef = doc(db, "users", uid);
-          const s = await getDoc(uRef);
-          if (s.exists()) next[uid] = { id: s.id, ...s.data() };
+        Array.from(missing).map(async (uid) => {
+          try {
+            const s = await getDoc(doc(db, "users", uid));
+            if (s.exists()) updates[uid] = { id: s.id, ...s.data() };
+          } catch {}
         })
       );
-      if (alive) setProfiles(next);
+      if (Object.keys(updates).length) {
+        setPeers((p) => ({ ...p, ...updates }));
+      }
     })();
-    return () => {
-      alive = false;
-    };
-  }, [rows, meUid]);
+  }, [threads, myUid, peers]);
 
-  const empty = useMemo(() => !loading && rows.length === 0, [loading, rows]);
-
-  function openChat(match) {
-    nav(`/chat/${match.id}`);
-  }
+  const empty = useMemo(() => !loading && threads.length === 0, [loading, threads]);
 
   return (
-    <div className="container" style={{ padding: 16 }}>
-      <h3 className="text-white fw-bold mb-3">Matches</h3>
+    <div className="container py-3">
+      <h4 className="fw-bold mb-3">Matches</h4>
 
-      {loading && <div className="text-white-50">Loading…</div>}
-      {empty && <div className="text-white-50">No matches yet.</div>}
+      {loading && <div className="text-muted">Loading…</div>}
+      {empty && <div className="text-muted">No matches yet. Start liking people in Browse!</div>}
 
-      <div className="row g-4">
-        {rows.map((m) => {
-          const other = Array.isArray(m.users) ? m.users.find((u) => u !== meUid) : null;
-          const u = other ? profiles[other] : null;
-          const photo = u ? firstPhotoFrom(u) : null;
+      <div className="list-group">
+        {threads.map((t) => {
+          const peerUid = (t.users || []).find((u) => u !== myUid);
+          const peer = peerUid ? peers[peerUid] : null;
+          const avatar = peer?.photoURL || "/logo.png";
+          const name = peer?.displayName || peer?.name || (peerUid ? "Someone" : "Unknown");
+          const unread = isUnreadForMe(t, myUid);
 
           return (
-            <div className="col-12 col-sm-6 col-lg-3" key={m.id}>
-              <div
-                className="card shadow-sm p-3"
+            <button
+              key={t.id}
+              type="button"
+              className="list-group-item list-group-item-action d-flex gap-3 align-items-center"
+              onClick={() => peerUid && nav(`/chat/with/${peerUid}`)}
+              disabled={!peerUid}
+            >
+              <img
+                src={avatar}
+                alt={name}
+                width={48}
+                height={48}
                 style={{
-                  borderRadius: 18,
-                  background: "rgba(0,0,0,.25)",
-                  border: "1px solid rgba(255,255,255,.15)",
-                  textAlign: "center",
-                  color: "#fff",
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  border: "2px solid rgba(0,0,0,.1)",
                 }}
-              >
-                <div
-                  style={{
-                    width: 170,
-                    height: 170,
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    margin: "0 auto 12px",
-                    border: "4px solid rgba(255,255,255,.7)",
-                    background: "#1b1b1b",
-                    boxShadow: "0 10px 28px rgba(0,0,0,.35)",
-                    position: "relative",
-                    cursor: photo ? "zoom-in" : "default",
-                  }}
-                  onClick={() => {
-                    if (!photo) return;
-                    const img = document.createElement("img");
-                    img.setAttribute("data-enlarge", photo);
-                    document.body.appendChild(img);
-                    img.click();
-                    img.remove();
-                  }}
-                >
-                  <img
-                    src={photo || PLACEHOLDER}
-                    alt={u?.displayName || "profile"}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    data-enlarge={photo || undefined}
-                  />
-                  <UnreadDot show={other ? unreadByPeer.has(other) : false} />
+              />
+              <div className="flex-grow-1 text-start">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="fw-semibold">{name}</div>
+                  {unread && <span className="badge bg-primary">Unread</span>}
                 </div>
-
-                <div className="fw-bold mb-2" style={{ fontSize: 18 }}>
-                  {u?.displayName || u?.name || "Someone"}
-                </div>
-
-                <div className="d-flex justify-content-center gap-2">
-                  <button className="btn btn-sm btn-warning fw-bold" onClick={() => openChat(m)}>
-                    Say hi
-                  </button>
-                  {other && (
-                    <Link className="btn btn-sm btn-outline-light fw-bold" to={`/u/${other}`}>
-                      View profile
-                    </Link>
-                  )}
-                </div>
+                <div className="text-muted small">{lastPreview(t) || "Say hi 👋"}</div>
               </div>
-            </div>
+              <div className="text-muted small">
+                {/* Optional: show relative time if you have a util */}
+              </div>
+            </button>
           );
         })}
       </div>

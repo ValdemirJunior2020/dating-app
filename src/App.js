@@ -1,6 +1,9 @@
 // src/App.js
 import React, { useEffect } from "react";
-import Profile from "./pages/Profile";
+// src/App.js
+// ...
+import Profile from "./pages/Profile.jsx"; // force .jsx so it can't pick the old one
+
 import { Routes, Route } from "react-router-dom";
 
 import NavBar from "./components/NavBar";

@@ -1,6 +1,7 @@
-// src/pages/Profile.js
+// src/pages/Profile.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+
 import { uploadPublicPhoto } from "../services/storage";
 import {
   getMyProfile,
@@ -260,25 +261,12 @@ export default function Profile() {
             {photos.map((p) => (
               <div key={p.id} className="col-6 col-md-4 col-lg-3">
                 <div className="card h-100">
-                  <img
-                    src={p.url}
-                    alt=""
-                    style={{ width: "100%", height: 180, objectFit: "cover" }}
-                  />
+                  <img src={p.url} alt="" style={{ width: "100%", height: 180, objectFit: "cover" }} />
                   <div className="card-body p-2 d-flex gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-primary flex-grow-1"
-                      onClick={() => onSetMain(p.url)}
-                    >
+                    <button type="button" className="btn btn-sm btn-primary flex-grow-1" onClick={() => onSetMain(p.url)}>
                       Set as main
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-danger"
-                      onClick={() => onDelete(p.id)}
-                      title="Remove from gallery"
-                    >
+                    <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => onDelete(p.id)} title="Remove from gallery">
                       ✕
                     </button>
                   </div>

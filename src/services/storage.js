@@ -5,10 +5,11 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 const storage = getStorage(getApp());
 
 export async function uploadPublicPhoto(uid, file) {
-  const safeName = String(file.name || "photo").replace(/\s+/g, "_");
-  const path = `public_photos/${uid}/${Date.now()}_${safeName}`;
+  if (!uid || !file) throw new Error("Missing uid or file");
+  const safe = String(file.name || "photo").replace(/\s+/g, "_");
+  const path = `public_photos/${uid}/${Date.now()}_${safe}`;
   const r = ref(storage, path);
-  const snap = await uploadBytes(r, file, { contentType: file.type });
+  const snap = await uploadBytes(r, file, { contentType: file.type || "image/*" });
   const url = await getDownloadURL(snap.ref);
   return { path, url };
 }
