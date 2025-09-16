@@ -5,49 +5,31 @@ export default function PaywallModal({ open, limit = 3, onClose, onUpgrade }) {
   if (!open) return null;
   return (
     <div
-      role="dialog"
+      className="modal fade show"
+      style={{ display: "block", background: "rgba(0,0,0,.55)" }}
       aria-modal="true"
-      className="position-fixed top-0 start-0 w-100 h-100"
-      style={{
-        background: "rgba(0,0,0,.6)",
-        zIndex: 1050,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-      onClick={onClose}
+      role="dialog"
     >
-      <div
-        className="card shadow-lg"
-        style={{ maxWidth: 460, width: "100%", borderRadius: 16 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="card-body">
-          <h5 className="fw-bold mb-2">Daily chat limit reached</h5>
-          <p className="text-muted mb-3">
-            You’ve started your free {limit} new chats for today. Upgrade to unlock
-            unlimited new conversations, see who liked you, and more.
-          </p>
-
-          <ul className="text-muted small mb-3">
-            <li>Unlimited new chats</li>
-            <li>See who liked you</li>
-            <li>Read receipts</li>
-            <li>Boost discounts</li>
-          </ul>
-
-          <div className="d-flex gap-2">
-            <button className="btn btn-secondary" onClick={onClose}>
-              Not now
-            </button>
-            <button
-              className="btn btn-primary fw-bold"
-              onClick={onUpgrade}
-              title="Upgrade (Stripe coming soon)"
-            >
-              Upgrade
-            </button>
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">Upgrade to keep chatting</h5>
+            <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
+          </div>
+          <div className="modal-body">
+            <p className="mb-2">
+              You’ve reached the free limit of <strong>{limit}</strong> new conversations.
+            </p>
+            <ul className="mb-3">
+              <li>Unlimited messages</li>
+              <li>See who liked you</li>
+              <li>Read receipts</li>
+            </ul>
+            <p className="text-muted small m-0">You can cancel anytime in the billing portal.</p>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-outline-secondary" onClick={onClose}>Not now</button>
+            <button className="btn btn-primary fw-bold" onClick={onUpgrade}>Upgrade</button>
           </div>
         </div>
       </div>

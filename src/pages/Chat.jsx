@@ -14,73 +14,23 @@ import {
 import { listenPresence, setTypingIn } from "../services/presence";
 import PaywallModal from "../components/PaywallModal";
 
-/* ---------- Small helpers ---------- */
 function bubbleSide(meUid, msg) {
   return msg.from === meUid ? "end" : "start";
 }
 function isRecentlyOnline(p) {
   if (!p?.lastSeen?.toDate) return false;
-  return Date.now() - p.lastSeen.toDate().getTime() < 2 * 60 * 1000; // 2 min
-}
-function photoCountFromDoc(userDoc) {
-  if (!userDoc) return 0;
-  if (Array.isArray(userDoc.photos)) return userDoc.photos.filter(Boolean).length;
-  return userDoc.photoURL ? 1 : 0;
+  return Date.now() - p.lastSeen.toDate().getTime() < 2 * 60 * 1000;
 }
 
-/* ---------- Inline Profile Nudge (no new files) ---------- */
-function ProfileNudge({ meDoc }) {
-  const nav = useNavigate();
-  const [dismissed, setDismissed] = useState(false);
-  const bioLen = (meDoc?.bio || "").trim().length;
-  const pCount = photoCountFromDoc(meDoc);
-
-  const needsBio = bioLen < 20; // encourage at least ~1–2 sentences
-  const needsPhotos = pCount < 2; // encourage at least 2 photos
-
-  if (dismissed || (!needsBio && !needsPhotos)) return null;
-
-  const items = [];
-  if (needsPhotos) items.push("add 2+ photos");
-  if (needsBio) items.push("write a short bio");
-
-  return (
-    <div className="alert alert-info d-flex align-items-center justify-content-between">
-      <div>
-        <strong>Boost your matches:</strong> {items.join(" and ")} to stand out.
-      </div>
-      <div className="d-flex gap-2">
-        <button
-          className="btn btn-sm btn-outline-secondary"
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss"
-        >
-          Later
-        </button>
-        <button
-          className="btn btn-sm btn-primary"
-          onClick={() => nav("/settings")}
-          aria-label="Improve profile"
-        >
-          Improve profile
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Page ---------- */
 export default function Chat() {
   const params = useParams();
   const nav = useNavigate();
   const { user: me } = useAuth() || {};
   const myUid = me?.uid || null;
 
-  // Accept multiple param names
   const peerUid =
     params.otherUid || params.uid || params.userId || params.id || params.matchId || null;
 
-  const [myDoc, setMyDoc] = useState(null);
   const [peerDoc, setPeerDoc] = useState(null);
   const [threadId, setThreadId] = useState(null);
   const [threadMeta, setThreadMeta] = useState(null);
@@ -96,27 +46,7 @@ export default function Chat() {
   const typingTimer = useRef(null);
   const lastTypingSent = useRef(null);
 
-  /* Load my profile (for nudge) */
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!myUid) {
-        if (!cancelled) setMyDoc(null);
-        return;
-      }
-      try {
-        const s = await getDoc(doc(db, "users", myUid));
-        if (!cancelled) setMyDoc(s.exists() ? { id: myUid, ...s.data() } : null);
-      } catch {
-        if (!cancelled) setMyDoc(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [myUid]);
-
-  /* Load peer user doc */
+  // Load peer user doc
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -124,19 +54,13 @@ export default function Chat() {
         if (!cancelled) setPeerDoc(null);
         return;
       }
-      try {
-        const s = await getDoc(doc(db, "users", peerUid));
-        if (!cancelled) setPeerDoc(s.exists() ? { id: peerUid, ...s.data() } : null);
-      } catch {
-        if (!cancelled) setPeerDoc(null);
-      }
+      const s = await getDoc(doc(db, "users", peerUid));
+      if (!cancelled) setPeerDoc(s.exists() ? { id: peerUid, ...s.data() } : null);
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [peerUid]);
 
-  /* Ensure thread & subscribe */
+  // Ensure thread & subscribe
   useEffect(() => {
     let unsubMsgs = null;
     let unsubMeta = null;
@@ -173,14 +97,14 @@ export default function Chat() {
     };
   }, [myUid, peerUid]);
 
-  /* Presence subscribe (peer) */
+  // Presence subscribe
   useEffect(() => {
     if (!peerUid) return () => {};
     const unsub = listenPresence(peerUid, setPeerPresence);
     return unsub;
   }, [peerUid]);
 
-  /* Mark last incoming as read */
+  // Mark read
   useEffect(() => {
     if (!threadId || !threadMeta || !myUid) return;
     const last = threadMeta.last || {};
@@ -192,7 +116,7 @@ export default function Chat() {
     }
   }, [threadId, threadMeta, myUid]);
 
-  /* Typing indicator */
+  // Typing indicator
   useEffect(() => {
     if (!threadId || !myUid) return;
 
@@ -229,7 +153,7 @@ export default function Chat() {
 
     try {
       setBusy(true);
-      if (!threadId) return; // blocked by paywall
+      if (!threadId) return; // paywall prevented thread creation
       await sendMessage(threadId, clean);
       setText("");
       setTypingIn(null);
@@ -246,7 +170,7 @@ export default function Chat() {
   const readReceipt = useMemo(() => {
     if (!threadMeta || !myUid) return null;
     const last = threadMeta.last || {};
-    if (last.from !== myUid) return null; // only for my last message
+    if (last.from !== myUid) return null;
     const peerRead = last.readBy && peerUid && last.readBy[peerUid];
     return peerRead ? "Read" : "Sent";
   }, [threadMeta, myUid, peerUid]);
@@ -254,9 +178,6 @@ export default function Chat() {
   return (
     <>
       <div className="container py-3">
-        {/* Inline profile nudge (shows if user needs bio/photos) */}
-        <ProfileNudge meDoc={myDoc} />
-
         <div className="d-flex align-items-center justify-content-between mb-2">
           <div className="d-flex align-items-center gap-2">
             <Link to="/messages" className="btn btn-sm btn-outline-secondary">
@@ -298,7 +219,7 @@ export default function Chat() {
               placeholder="Type a message…"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              disabled={busy || !threadId} // disabled if paywall blocked thread creation
+              disabled={busy || !threadId}
             />
             <button className="btn btn-primary fw-bold" disabled={busy || !text.trim() || !threadId}>
               {busy ? "Sending…" : "Send"}
