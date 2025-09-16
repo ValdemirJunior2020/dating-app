@@ -1,31 +1,52 @@
 // src/firebase.js
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut,
-  createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  sendPasswordResetEmail, updateProfile,
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
 } from "firebase/auth";
-import { getFirestore, doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  serverTimestamp,
+  getDoc,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import {
   initializeAppCheck,
   ReCaptchaV3Provider,
-  getToken as getAppCheckToken
+  getToken as getAppCheckToken,
 } from "firebase/app-check";
 
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FB_API_KEY || "AIzaSyDUOk9E2SAXZvARgQSFQVeEGoRMWLWDbiI",
-  authDomain: "review-45013.firebaseapp.com",
-  projectId: "review-45013",
-  storageBucket: "review-45013.firebasestorage.app", // ✅ make sure this matches Firebase console
-  messagingSenderId: "198812507562",
-  appId: "1:198812507562:web:fb9352cc9aafd3361a5fd3",
-  measurementId: "G-972PGXEDB3",
+  apiKey:
+    process.env.REACT_APP_FIREBASE_API_KEY ||
+    process.env.REACT_APP_FB_API_KEY ||
+    "AIzaSyDUOk9E2SAXZvARgQSFQVeEGoRMWLWDbiI",
+  authDomain:
+    process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "review-45013.firebaseapp.com",
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "review-45013",
+  // ✅ use the bucket that actually exists in your project
+  storageBucket:
+    process.env.REACT_APP_FIREBASE_STORAGE_BUCKET ||
+    "review-45013.firebasestorage.app",
+  messagingSenderId:
+    process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "198812507562",
+  appId:
+    process.env.REACT_APP_FIREBASE_APP_ID ||
+    "1:198812507562:web:fb9352cc9aafd3361a5fd3",
+  measurementId: process.env.REACT_APP_MEASUREMENT_ID || "G-972PGXEDB3",
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// ✅ Use your NEW valid reCAPTCHA v3 site key
+/* --------------------------- Firebase App Check --------------------------- */
 const RECAPTCHA_V3_SITE_KEY =
   process.env.REACT_APP_APPCHECK_RECAPTCHA_KEY ||
   "6LeYlL4rAAAAAPd2GYMTKzjJAO_seSawCRs73aaK";
@@ -46,7 +67,7 @@ const appCheck = initializeAppCheck(app, {
   isTokenAutoRefreshEnabled: true,
 });
 
-// Try to fetch token immediately
+// Try to fetch token immediately (non-blocking)
 (async () => {
   try {
     const res = await getAppCheckToken(appCheck, true);
@@ -56,12 +77,14 @@ const appCheck = initializeAppCheck(app, {
   }
 })();
 
+/* ------------------------------ Core services ----------------------------- */
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// ✅ Explicitly bind Storage to this bucket
-export const storage = getStorage(app, "gs://review-45013.firebasestorage.app");
+// ✅ Bind Storage to the bucket in firebaseConfig.storageBucket
+export const storage = getStorage(app);
 
+/* --------------------------- Auth convenience API ------------------------- */
 export const provider = new GoogleAuthProvider();
 
 export async function signInWithGoogle() {
@@ -92,26 +115,39 @@ export function logOut() {
   return signOut(auth);
 }
 
+/**
+ * Creates/merges a minimal user doc compatible with strict Firestore rules.
+ * Extend via Settings/Profile screens rather than here to avoid rule conflicts.
+ */
 export async function ensureUserDoc(user, overrides = {}) {
   if (!user) return;
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
 
+  // Keep fields minimal to satisfy common rulesets
   const base = {
-    uid: user.uid,
-    email: user.email || "",
     displayName: user.displayName || overrides.displayName || "",
-    about: overrides.about || "",
-    photos: [],
+    photoURL: user.photoURL || "",
+    bio: overrides.about || "", // optional; many rules allow 'bio'
+    school: "",
+    gender: "",
+    age: "",
+    collegeVerified: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    emailPrefs: { welcome: true, likes: true, messages: true },
   };
 
   if (!snap.exists()) {
     await setDoc(ref, base);
-  } else if (Object.keys(overrides).length) {
-    await setDoc(ref, { ...overrides, updatedAt: serverTimestamp() }, { merge: true });
+  } else {
+    // Only merge whitelisted fields
+    const patch = {
+      ...(overrides.displayName ? { displayName: overrides.displayName } : {}),
+      updatedAt: serverTimestamp(),
+    };
+    if (Object.keys(patch).length > 1) {
+      await setDoc(ref, patch, { merge: true });
+    }
   }
 }
 

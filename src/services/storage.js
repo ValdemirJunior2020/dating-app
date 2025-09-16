@@ -2,7 +2,9 @@
 import { getApp } from "firebase/app";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-const storage = getStorage(getApp());
+const app = getApp();
+// Use default storage bound to app.options.storageBucket (must be *.appspot.com)
+const storage = getStorage(app);
 
 export async function uploadPublicPhoto(uid, file) {
   if (!uid || !file) throw new Error("Missing uid or file");
