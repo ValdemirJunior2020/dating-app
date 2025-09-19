@@ -1,17 +1,23 @@
 // src/services/storage.js
-import { getApp } from "firebase/app";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "../firebase"; // <-- uses the bucket from firebaseConfig
 
-const app = getApp();
-// Use default storage bound to app.options.storageBucket (must be *.appspot.com)
-const storage = getStorage(app);
-
+/**
+ * Upload a file to public gallery: public_photos/<uid>/<timestamp_filename>
+ * Returns { path, url }.
+ */
 export async function uploadPublicPhoto(uid, file) {
-  if (!uid || !file) throw new Error("Missing uid or file");
-  const safe = String(file.name || "photo").replace(/\s+/g, "_");
-  const path = `public_photos/${uid}/${Date.now()}_${safe}`;
+  if (!uid) throw new Error("Missing uid");
+  if (!file) throw new Error("No file selected");
+
+  const safeName = String(file.name || "photo").replace(/[^\w.\-]/g, "_");
+  const path = `public_photos/${uid}/${Date.now()}_${safeName}`;
   const r = ref(storage, path);
-  const snap = await uploadBytes(r, file, { contentType: file.type || "image/*" });
-  const url = await getDownloadURL(snap.ref);
+
+  await uploadBytes(r, file, {
+    contentType: file.type || "application/octet-stream",
+  });
+
+  const url = await getDownloadURL(r);
   return { path, url };
 }

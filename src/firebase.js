@@ -24,6 +24,12 @@ import {
   getToken as getAppCheckToken,
 } from "firebase/app-check";
 
+/**
+ * IMPORTANT:
+ * - This project uses the new-style bucket domain: <project-id>.firebasestorage.app
+ * - Keep it overrideable via .env:
+ *     REACT_APP_FIREBASE_STORAGE_BUCKET=review-45013.firebasestorage.app
+ */
 const firebaseConfig = {
   apiKey:
     process.env.REACT_APP_FIREBASE_API_KEY ||
@@ -32,7 +38,6 @@ const firebaseConfig = {
   authDomain:
     process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "review-45013.firebaseapp.com",
   projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "review-45013",
-  // ✅ use the bucket that actually exists in your project
   storageBucket:
     process.env.REACT_APP_FIREBASE_STORAGE_BUCKET ||
     "review-45013.firebasestorage.app",
@@ -51,7 +56,7 @@ const RECAPTCHA_V3_SITE_KEY =
   process.env.REACT_APP_APPCHECK_RECAPTCHA_KEY ||
   "6LeYlL4rAAAAAPd2GYMTKzjJAO_seSawCRs73aaK";
 
-// Debug token for local dev only
+// Debug token (local only)
 if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
   const DEBUG_APPCHECK_TOKEN = "2F23D3D2-AF55-4BB5-BEA4-1507535C7E30";
   try {
@@ -59,7 +64,6 @@ if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
   } catch {}
   window.FIREBASE_APPCHECK_DEBUG_TOKEN = DEBUG_APPCHECK_TOKEN;
   console.log("Using App Check debug token:", DEBUG_APPCHECK_TOKEN);
-  console.log("App ID:", app?.options?.appId);
 }
 
 const appCheck = initializeAppCheck(app, {
@@ -67,7 +71,7 @@ const appCheck = initializeAppCheck(app, {
   isTokenAutoRefreshEnabled: true,
 });
 
-// Try to fetch token immediately (non-blocking)
+// Non-blocking fetch for a token to warm things up
 (async () => {
   try {
     const res = await getAppCheckToken(appCheck, true);
@@ -80,13 +84,12 @@ const appCheck = initializeAppCheck(app, {
 /* ------------------------------ Core services ----------------------------- */
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-
-// ✅ Bind Storage to the bucket in firebaseConfig.storageBucket
+// Bind to the configured bucket (new domain is fine)
 export const storage = getStorage(app);
 
-/* --------------------------- Auth convenience API ------------------------- */
 export const provider = new GoogleAuthProvider();
 
+/* --------------------------- Convenience auth API ------------------------- */
 export async function signInWithGoogle() {
   const res = await signInWithPopup(auth, provider);
   await ensureUserDoc(res.user);
@@ -116,19 +119,18 @@ export function logOut() {
 }
 
 /**
- * Creates/merges a minimal user doc compatible with strict Firestore rules.
- * Extend via Settings/Profile screens rather than here to avoid rule conflicts.
+ * Minimal user doc compatible with strict Firestore rules
+ * (avoid setting fields that rules don’t allow on create).
  */
 export async function ensureUserDoc(user, overrides = {}) {
   if (!user) return;
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
 
-  // Keep fields minimal to satisfy common rulesets
   const base = {
     displayName: user.displayName || overrides.displayName || "",
     photoURL: user.photoURL || "",
-    bio: overrides.about || "", // optional; many rules allow 'bio'
+    bio: overrides.about || "",
     school: "",
     gender: "",
     age: "",
@@ -140,7 +142,6 @@ export async function ensureUserDoc(user, overrides = {}) {
   if (!snap.exists()) {
     await setDoc(ref, base);
   } else {
-    // Only merge whitelisted fields
     const patch = {
       ...(overrides.displayName ? { displayName: overrides.displayName } : {}),
       updatedAt: serverTimestamp(),

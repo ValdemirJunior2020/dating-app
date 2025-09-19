@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    /* ---------- users profile ---------- */
+    match /users/{uid} {
+      allow read: if true;
+      allow create, update: if isOwner(uid);
+    }
+
+    /* ---------- public gallery metadata ---------- */
+    match /users/{uid}/public_photos/{pid} {
+      allow read: if true;
+
+      allow create: if isOwner(uid) &&
+                    request.resource.data.keys().hasOnly(
+                      ['owner','url','createdAt','updatedAt','caption']
+                    ) &&
+                    request.resource.data.owner == uid &&
+                    request.resource.data.url is string &&
+                    request.resource.data.url.size() > 6 &&
+                    (
+                      !('caption' in request.resource.data) ||
+                      (request.resource.data.caption is string &&
+                       request.resource.data.caption.size() <= 140)
+                    ) &&
+                    request.resource.data.createdAt == request.time &&
+                    request.resource.data.updatedAt == request.time;
+
+      allow update: if isOwner(uid) &&
+                    request.resource.data.keys().hasOnly(
+                      ['owner','url','createdAt','updatedAt','caption']
+                    ) &&
+                    request.resource.data.owner == resource.data.owner &&
+                    request.resource.data.url == resource.data.url &&
+                    request.resource.data.createdAt == resource.data.createdAt &&
+                    request.resource.data.updatedAt == request.time;
+
+      allow delete: if isOwner(uid);
+    }
+
+    /* ---------- presence (online/typing/lastSeen) ---------- */
+    match /presence/{uid} {
+      allow read: if true;
+      allow create, update, delete: if isOwner(uid);
+    }
+
+    /* ---------- chat threads + messages ---------- */
+    match /threads/{tid} {
+      // Threads are visible to signed-in users (adjust later if you add participants check)
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn();
+
+      match /messages/{mid} {
+        allow read: if signedIn();
+        // only allow the sender to create (expects { from, text, createdAt, ... })
+        allow create: if signedIn() &&
+                      request.resource.data.from == request.auth.uid &&
+                      request.resource.data.createdAt == request.time;
+        // disallow edits; allow delete by sender
+        allow update: if false;
+        allow delete: if signedIn() && resource.data.from == request.auth.uid;
+      }
+    }
+
+    /* ---------- likes (inbox/outbox or flat) ---------- */
+    match /likes/{document=**} {
+      // keep it simple for now
+      allow read, write: if signedIn();
+    }
+
+    /* ---------- limits / streaks / misc app docs ---------- */
+    match /limits/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+    match /streaks/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    /* ---------- fallback (read-only for signed in) ---------- */
+    match /{document=**} {
+      allow read: if signedIn();
+    }
+  }
+}
