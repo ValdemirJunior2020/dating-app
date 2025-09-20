@@ -21,12 +21,11 @@ import { getStorage } from "firebase/storage";
 import {
   initializeAppCheck,
   ReCaptchaV3Provider,
-  getToken as getAppCheckToken,
 } from "firebase/app-check";
 
 /**
  * IMPORTANT:
- * - This project uses the new-style bucket domain: <project-id>.firebasestorage.app
+ * - Your bucket uses the new domain: <project-id>.firebasestorage.app
  * - Keep it overrideable via .env:
  *     REACT_APP_FIREBASE_STORAGE_BUCKET=review-45013.firebasestorage.app
  */
@@ -52,44 +51,30 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 /* --------------------------- Firebase App Check --------------------------- */
-const RECAPTCHA_V3_SITE_KEY =
-  process.env.REACT_APP_APPCHECK_RECAPTCHA_KEY ||
-  "6LeYlL4rAAAAAPd2GYMTKzjJAO_seSawCRs73aaK";
+// In dev we’ll use a DEBUG token; in prod, provide your real v3 site key via env.
+const RECAPTCHA_V3_SITE_KEY = process.env.REACT_APP_APPCHECK_RECAPTCHA_KEY || "";
 
-// Debug token (local only)
-if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
-  const DEBUG_APPCHECK_TOKEN = "2F23D3D2-AF55-4BB5-BEA4-1507535C7E30";
-  try {
-    window.localStorage.removeItem("firebase:appCheck:debugToken");
-  } catch {}
-  window.FIREBASE_APPCHECK_DEBUG_TOKEN = DEBUG_APPCHECK_TOKEN;
-  console.log("Using App Check debug token:", DEBUG_APPCHECK_TOKEN);
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+  // Let Firebase generate/accept a local debug token automatically
+  window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  console.info("[AppCheck] DEBUG token enabled for local development.");
 }
 
-const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
+initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY || "debug"),
   isTokenAutoRefreshEnabled: true,
 });
-
-// Non-blocking fetch for a token to warm things up
-(async () => {
-  try {
-    const res = await getAppCheckToken(appCheck, true);
-    console.log("App Check token acquired:", Boolean(res?.token));
-  } catch (e) {
-    console.error("App Check token fetch FAILED:", e?.message || e);
-  }
-})();
+// NOTE: Do NOT call getToken() here; the SDK will fetch on demand.
+// This avoids early “AppCheck: reCAPTCHA error” during boot.
 
 /* ------------------------------ Core services ----------------------------- */
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-// Bind to the configured bucket (new domain is fine)
-export const storage = getStorage(app);
-
-export const provider = new GoogleAuthProvider();
+export const storage = getStorage(app); // bound to firebaseConfig.storageBucket
 
 /* --------------------------- Convenience auth API ------------------------- */
+export const provider = new GoogleAuthProvider();
+
 export async function signInWithGoogle() {
   const res = await signInWithPopup(auth, provider);
   await ensureUserDoc(res.user);
@@ -119,8 +104,8 @@ export function logOut() {
 }
 
 /**
- * Minimal user doc compatible with strict Firestore rules
- * (avoid setting fields that rules don’t allow on create).
+ * Minimal user document to satisfy strict Firestore rules.
+ * (Extend through Settings/Profile UIs rather than here.)
  */
 export async function ensureUserDoc(user, overrides = {}) {
   if (!user) return;
@@ -128,6 +113,8 @@ export async function ensureUserDoc(user, overrides = {}) {
   const snap = await getDoc(ref);
 
   const base = {
+    uid: user.uid,
+    email: user.email || "",
     displayName: user.displayName || overrides.displayName || "",
     photoURL: user.photoURL || "",
     bio: overrides.about || "",
