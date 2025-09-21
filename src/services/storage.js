@@ -1,28 +1,36 @@
 // src/services/storage.js
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "../firebase";
+import { storage, auth } from "../firebase";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 /**
- * Upload a public gallery image to:
- *   /public_photos/{uid}/{timestamp}_{safeName}
- * Returns { path, url }
+ * Uploads a File to: public_photos/{uid}/{timestamp}_{safeName}
+ * Resolves { url, fullPath }.
  */
-export async function uploadPublicPhoto(uid, file) {
-  if (!uid) throw new Error("Missing uid");
-  if (!file) throw new Error("Missing file");
+export function uploadPublicPhoto(file) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Must be signed in to upload");
+  if (!file) throw new Error("No file selected");
 
+  const uid = user.uid;
   const ts = Date.now();
-  const original = file.name || "photo.jpg";
-  // Keep letters, digits, dot, underscore, hyphen; replace the rest with "_"
-  const safeName = original.replace(/[^A-Za-z0-9._-]/g, "_");
+  // Put '-' at end of the class so no escape needed; fixes ESLint "unnecessary escape"
+  const safeName = (file.name || `photo_${ts}.jpg`).replace(/[^\w.-]+/g, "_");
+  const fullPath = `public_photos/${uid}/${ts}_${safeName}`;
+  const fileRef = ref(storage, fullPath);
+  const metadata = { contentType: file.type || "application/octet-stream" };
 
-  const path = `public_photos/${uid}/${ts}_${safeName}`;
-  const r = ref(storage, path);
+  const task = uploadBytesResumable(fileRef, file, metadata);
 
-  const snap = await uploadBytes(r, file, {
-    contentType: file.type || "image/jpeg",
+  return new Promise((resolve, reject) => {
+    task.on(
+      "state_changed",
+      // progress callback optional; provide if you want a progress bar
+      undefined,
+      (err) => reject(err),
+      async () => {
+        const url = await getDownloadURL(task.snapshot.ref);
+        resolve({ url, fullPath });
+      }
+    );
   });
-  const url = await getDownloadURL(snap.ref);
-
-  return { path, url };
 }
