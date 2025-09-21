@@ -26,5 +26,12 @@
 
     <!-- ⤵️ Seasonal background (no React changes) -->
     <script defer src="%PUBLIC_URL%/seasonal-bg.js"></script>
+    <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+  }
+  try { localStorage.removeItem('firebase:appCheckDebugToken'); } catch (e) {}
+</script>
+
   </body>
 </html>
