@@ -21,8 +21,7 @@ import { getStorage } from "firebase/storage";
 
 /**
  * Hardcoded Firebase web config (public by design).
- * This avoids any env-injection issues causing key=YOUR_KEY in production.
- * You can move back to env vars later if you want, but this is perfectly fine.
+ * This guarantees no placeholder like YOUR_KEY ever ships to prod.
  */
 const firebaseConfig = {
   apiKey: "AIzaSyDUOk9E2SAXZvARgQSFQVeEGoRMWLWDbiI",
@@ -34,7 +33,7 @@ const firebaseConfig = {
   measurementId: "G-972PGXEDB3",
 };
 
-// ---- tiny runtime log so you can verify on prod ----
+// Tiny runtime log to verify real values in prod
 if (typeof window !== "undefined" && !window.__FB_DEBUGGED__) {
   window.__FB_DEBUGGED__ = true;
   // eslint-disable-next-line no-console
@@ -49,12 +48,12 @@ if (typeof window !== "undefined" && !window.__FB_DEBUGGED__) {
 // Init
 export const app = initializeApp(firebaseConfig);
 
-// Services your app imports
+// Services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// --- Auth helpers (used across your app) ---
+// ---- Auth helpers (used across your app) ----
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
@@ -73,15 +72,5 @@ export async function logOut() {
   return signOut(auth);
 }
 
-/**
- * App Check is intentionally disabled here until prod auth works for users.
- * Once sign-up/sign-in are confirmed, re-enable with your site key:
- *
- * import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
- * initializeAppCheck(app, {
- *   provider: new ReCaptchaV3Provider("<YOUR_RECAPTCHA_V3_SITE_KEY>"),
- *   isTokenAutoRefreshEnabled: true,
- * });
- *
- * Also be sure App Check “Enforcement” is ON in console only after this works.
- */
+// NOTE: App Check is intentionally NOT imported or initialized here.
+// This prevents @firebase/auth from trying to retrieve an App Check token.
