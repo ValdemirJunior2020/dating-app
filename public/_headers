@@ -1,16 +1,54 @@
 /*
+  # Security baseline
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   Referrer-Policy: strict-origin-when-cross-origin
-  Content-Security-Policy: default-src 'self';
+  X-Content-Type-Options: nosniff
+
+  # Content Security Policy for Firebase + Stripe + Bootstrap
+  # Tweak this list only if you add new third-parties.
+  Content-Security-Policy:
+    default-src 'self';
+    base-uri 'self';
+    object-src 'none';
+
+    # Where your JS can connect (XHR/fetch/WebSocket/EventSource)
     connect-src 'self'
+      https://firestore.googleapis.com
+      https://www.googleapis.com
       https://identitytoolkit.googleapis.com
       https://securetoken.googleapis.com
-      https://www.googleapis.com
-      https://firebasestorage.googleapis.com;
-    img-src 'self' data: https://firebasestorage.googleapis.com https://*.gstatic.com;
-    script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com;
-    frame-src https://www.google.com;
+      https://firebasestorage.googleapis.com
+      https://firebaseinstallations.googleapis.com
+      https://oauth2.googleapis.com
+      https://accounts.google.com
+      https://www.google-analytics.com
+      https://region1.google-analytics.com
+      https://api.stripe.com;
 
-# don’t cache old service workers
-/service-worker.js
-  Cache-Control: no-store
+    # Scripts you load. Keep 'unsafe-inline' because Bootstrap/your inline fixes need it.
+    script-src 'self' 'unsafe-inline'
+      https://www.gstatic.com
+      https://www.google.com
+      https://js.stripe.com;
+
+    # Styles (Bootstrap)
+    style-src 'self' 'unsafe-inline';
+
+    # Images you display (user uploads + firebase + gstatic + google’s cleardot)
+    img-src 'self' data:
+      https://firebasestorage.googleapis.com
+      https://*.gstatic.com
+      https://www.google.com;
+
+    # If any fonts are external later, add them here (example gstatic fonts)
+    font-src 'self' https://fonts.gstatic.com data:;
+
+    # Frames/iframes (Google OAuth & Stripe)
+    frame-src
+      https://www.google.com
+      https://accounts.google.com
+      https://js.stripe.com
+      https://hooks.stripe.com;
+
+    # Media (video/audio) if you ever need it from Storage
+    media-src 'self' https://firebasestorage.googleapis.com;
