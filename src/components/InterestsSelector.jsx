@@ -1,17 +1,51 @@
 // src/components/InterestsSelector.jsx
 import React, { useMemo, useRef, useState } from "react";
 
-const DEFAULT_SUGGESTIONS = [
-  "Study Sessions","Coding","AI/ML","Design","Entrepreneurship","Basketball","Soccer","Gym",
-  "Running","Yoga","Gaming","Esports","Anime","Photography","Content Creation","Music","Guitar",
-  "Piano","Singing","Podcasts","Volunteering","Campus Events","Movies","Cooking","Travel",
-  "Coffee","Pets","Language Exchange","Board Games","Reading","Faith","Bible","Outdoors",
+/** Big catalog: campus, tech, hobbies, Christian/Bible, politics */
+export const INTEREST_CATALOG = [
+  // Campus / Study / Tech
+  "Study Sessions","Coding","AI/ML","Design","Entrepreneurship","Startups",
+  "Hackathons","Open Source","Robotics","Math","Physics","Chemistry","Biology",
+  "Economics","Finance","Marketing","Psychology","Philosophy",
+
+  // Sports & Fitness
+  "Basketball","Soccer","Gym","Running","Yoga","Pilates","Swimming","Hiking",
+  "Tennis","Pickleball","Cycling","Martial Arts",
+
+  // Gaming / Anime
+  "Gaming","Esports","Anime","Manga","Tabletop RPG","Board Games","Chess",
+
+  // Arts & Media
+  "Photography","Content Creation","Music","Guitar","Piano","Singing","DJing",
+  "Podcasts","Movies","Filmmaking","Theater","Poetry","Writing","Reading",
+
+  // Social
+  "Volunteering","Campus Events","Travel","Cooking","Baking","Coffee","Tea",
+  "Pets","Language Exchange","Outdoors","Camping","Beach",
+
+  // Faith (Christian)
+  "Faith","Bible Study","Prayer","Church","Worship Music","Christian Podcasts",
+  "Youth Ministry","Mission Trips","Apologetics","Christian Fellowship",
+  "Devotionals","Christian Books","Theology",
+
+  // Christian values / lifestyle (non-doctrinal tags)
+  "Kindness","Service","Charity","Community","Forgiveness","Humility",
+  "Stewardship","Chastity","Sobriety",
+
+  // Politics (neutral labels)
+  "Politics","Conservative","Liberal","Moderate","Libertarian","Independent",
+  "Non-Political","Civic Engagement",
 ];
 
+const DEFAULT_SUGGESTIONS = INTEREST_CATALOG;
+
+/** Keep it ESLint-friendly; no unnecessary escapes */
 function sanitizeTag(s) {
   return String(s || "")
+    .normalize("NFKC")
     .replace(/\s+/g, " ")
-    .replace(/[^\p{L}\p{N}\-\s&'!?.]/gu, "") // keep letters/numbers and a few symbols
+    // Allow: letters (incl. many Latin accents), numbers, spaces, and & ' ! ? . -
+    .replace(/[^0-9A-Za-z\u00C0-\u024F\u1E00-\u1EFF &'!?.-]/g, "")
     .trim();
 }
 
@@ -135,7 +169,7 @@ export default function InterestsSelector({
             <input
               ref={otherInputRef}
               className="form-control"
-              placeholder="Type here (e.g., Candle Making)"
+              placeholder="Type here (e.g., Bible Study Group)"
               value={otherVal}
               onChange={(e) => setOtherVal(e.target.value)}
               maxLength={40}

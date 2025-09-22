@@ -1,151 +1,110 @@
 // src/services/users.js
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
-  onSnapshot,
   setDoc,
-  updateDoc,
-  serverTimestamp,
+  onSnapshot,
+  collection,
   addDoc,
   deleteDoc,
+  serverTimestamp,
+  orderBy,
+  query,
+  getDocs,
 } from "firebase/firestore";
-import { db } from "../firebase";
-import cleanPhotos from "../utils/cleanPhotos"; // optional guard below
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { auth, db, storage } from "../firebase";
 
-/* ----------------------------- Photo utilities ---------------------------- */
-function photosFrom(userDoc) {
-  const arr = Array.isArray(userDoc?.photos) ? userDoc.photos : [];
-  const cleaned = (cleanPhotos ? cleanPhotos(arr) : arr).filter(
-    (s) => typeof s === "string" && s.length > 6
-  );
-  if (cleaned.length > 0) return cleaned;
-  return typeof userDoc?.photoURL === "string" && userDoc.photoURL.length > 6
-    ? [userDoc.photoURL]
-    : [];
-}
+/** ----------------- Profiles ----------------- **/
 
-export function isProfileVisible(userDoc) {
-  return photosFrom(userDoc).length > 0;
-}
-
-export function needsPhotoEncouragement(userDoc) {
-  const n = photosFrom(userDoc).length;
-  return n > 0 && n < 3;
-}
-
-/* ------------------------------ Profile fetch ----------------------------- */
-export async function getUserProfile(uid) {
-  if (!uid) return null;
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
+export async function getMyProfile() {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("Not signed in");
+  const refDoc = doc(db, "users", uid);
+  const snap = await getDoc(refDoc);
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-// Alias kept for convenience in places where we call “my” profile:
-export const getMyProfile = getUserProfile;
-
-/** Client-side fetch of visible users (dev/demo) */
-export async function fetchVisibleUsers() {
-  const usersRef = collection(db, "users");
-  const snap = await getDocs(usersRef);
-  const list = [];
-  snap.forEach((d) => {
-    const data = d.data();
-    if (isProfileVisible(data)) list.push({ id: d.id, ...data });
-  });
-  return list;
-}
-
-/** Persist a boolean 'visible' flag (optional helper) */
-export async function recomputeVisibility(uid) {
-  if (!uid) return;
-  const ref = doc(db, "users", uid);
-  const got = await getDoc(ref);
-  if (!got.exists()) return;
-  const data = got.data();
-  const visible = isProfileVisible(data);
-  await updateDoc(ref, { visible });
-}
-
-/* ----------------------- Profile update (safe merge) ---------------------- */
-export async function updateMyProfile(uid, patch = {}) {
-  if (!uid) throw new Error("Missing uid");
-  // Don’t touch createdAt here; rules often require it to remain unchanged
-  const safe = { ...patch, updatedAt: serverTimestamp() };
-  await setDoc(doc(db, "users", uid), safe, { merge: true });
-}
-
-/* ------------------------ Notification preferences ------------------------ */
-export async function updateNotificationPrefs(uid, prefs = {}) {
-  if (!uid) throw new Error("Missing uid");
+/**
+ * Merge partial fields into the user's document.
+ * Examples: { displayName }, { bio }, { interests: [...] }
+ */
+export async function updateMyProfile(partial) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("Not signed in");
+  const refDoc = doc(db, "users", uid);
   await setDoc(
-    doc(db, "users", uid),
-    { notificationPrefs: { ...prefs }, updatedAt: serverTimestamp() },
+    refDoc,
+    { ...partial, updatedAt: serverTimestamp() },
     { merge: true }
   );
 }
 
-/* ------------- Interests helpers (compat with older components) ----------- */
-export function tagsFrom(x) {
-  if (Array.isArray(x)) return x.map(String).map((s) => s.trim()).filter(Boolean);
-  if (typeof x === "string") return x.split(",").map((s) => s.trim()).filter(Boolean);
-  if (x && typeof x === "object") return Object.keys(x).filter((k) => Boolean(x[k]));
-  return [];
-}
+/** ----------------- Public Photos ----------------- **/
 
-export async function saveUserInterests(uid, interests = []) {
-  const clean = Array.from(new Set(tagsFrom(interests))).slice(0, 25);
-  await setDoc(doc(db, "users", uid), { interests: clean, updatedAt: serverTimestamp() }, { merge: true });
-  return clean;
-}
-
-export async function setUserPhoneAndPrefs(uid, phone, prefs = {}) {
-  if (!uid) throw new Error("Missing uid");
-  const payload = {};
-  if (phone) payload.phone = String(phone);
-  if (prefs && typeof prefs === "object") payload.notificationPrefs = { ...prefs };
-  payload.updatedAt = serverTimestamp();
-  await setDoc(doc(db, "users", uid), payload, { merge: true });
-}
-
-/* --------------------------- Public gallery APIs -------------------------- */
-/**
- * Firestore rules for users/{uid}/public_photos/{pid} require:
- * { owner, url, createdAt==request.time, updatedAt==request.time, caption? }
- */
-export function listenMyPublicPhotos(uid, cb) {
-  if (!uid) return () => {};
-  const colRef = collection(db, "users", uid, "public_photos");
-  return onSnapshot(colRef, (qs) => {
-    const rows = [];
-    qs.forEach((d) => rows.push({ id: d.id, ...d.data() }));
-    cb(rows);
+// realtime gallery listener
+export function listenMyPublicPhotos(cb) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("Not signed in");
+  const col = collection(db, "users", uid, "public_photos");
+  const q = query(col, orderBy("createdAt", "desc"));
+  return onSnapshot(q, (snap) => {
+    const items = [];
+    snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+    cb(items);
   });
 }
 
-export async function addPublicPhoto(uid, url, caption = "") {
-  if (!uid || !url) throw new Error("Missing uid or url");
+/**
+ * Upload a file to Storage, then create a Firestore doc in:
+ * /users/{uid}/public_photos/{pid}
+ *
+ * NOTE: Firestore rules for public_photos only allow
+ * { owner, url, createdAt, updatedAt, caption }.
+ * Do NOT write extra fields.
+ */
+export async function addPublicPhoto(file, { caption = "" } = {}) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("Not signed in");
+
+  // Simple limit: max 6 items (change if you want 3)
   const colRef = collection(db, "users", uid, "public_photos");
+  const current = await getDocCount(colRef);
+  if (current >= 6) {
+    throw new Error("You can upload at most 6 photos.");
+  }
+
+  const path = `users/${uid}/public/${Date.now()}_${file.name}`;
+  const sref = ref(storage, path);
+  await uploadBytes(sref, file);
+  const url = await getDownloadURL(sref);
+
   await addDoc(colRef, {
     owner: uid,
-    url: String(url),
-    caption: caption ? String(caption).slice(0, 140) : "",
+    url,
+    caption: (caption || "").slice(0, 140),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  return url;
 }
 
-export async function setMainPhoto(uid, url) {
-  if (!uid || !url) throw new Error("Missing uid or url");
-  await updateDoc(doc(db, "users", uid), {
-    photoURL: String(url),
-    updatedAt: serverTimestamp(),
-  });
+async function getDocCount(colRef) {
+  const snap = await getDocs(colRef);
+  return snap.size;
 }
 
-export async function deletePublicPhotoDoc(uid, pid) {
-  if (!uid || !pid) throw new Error("Missing uid or pid");
-  await deleteDoc(doc(db, "users", uid, "public_photos", pid));
+export async function deletePublicPhotoDoc(photo) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("Not signed in");
+  if (!photo?.id) throw new Error("Missing photo id");
+  // Firestore rules allow owner to delete the doc.
+  // (We are not deleting the Storage file here to keep rules simple.)
+  await deleteDoc(doc(db, "users", uid, "public_photos", photo.id));
+}
+
+/** Optional: mark a photo as main (stores on user doc) */
+export async function setMainPhoto(url) {
+  await updateMyProfile({ photoURL: url });
 }

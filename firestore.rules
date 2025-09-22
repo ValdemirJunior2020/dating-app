@@ -1,3 +1,4 @@
+// C:\your-project\firestore.rules
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -11,10 +12,11 @@ service cloud.firestore {
       allow create, update: if isOwner(uid);
     }
 
-    /* ---------- public gallery metadata ---------- */
+    /* ---------- public gallery metadata (per user) ---------- */
     match /users/{uid}/public_photos/{pid} {
       allow read: if true;
 
+      // create only with the allowed fields; timestamps must be server time
       allow create: if isOwner(uid) &&
                     request.resource.data.keys().hasOnly(
                       ['owner','url','createdAt','updatedAt','caption']
@@ -30,6 +32,7 @@ service cloud.firestore {
                     request.resource.data.createdAt == request.time &&
                     request.resource.data.updatedAt == request.time;
 
+      // update only allows caption + updatedAt to change
       allow update: if isOwner(uid) &&
                     request.resource.data.keys().hasOnly(
                       ['owner','url','createdAt','updatedAt','caption']
@@ -39,6 +42,7 @@ service cloud.firestore {
                     request.resource.data.createdAt == resource.data.createdAt &&
                     request.resource.data.updatedAt == request.time;
 
+      // owner can delete
       allow delete: if isOwner(uid);
     }
 
@@ -50,25 +54,24 @@ service cloud.firestore {
 
     /* ---------- chat threads + messages ---------- */
     match /threads/{tid} {
-      // Threads are visible to signed-in users (adjust later if you add participants check)
-      allow read: if signedIn();
-      allow create, update, delete: if signedIn();
+      // (you can tighten this later by verifying participants)
+      allow read, create, update, delete: if signedIn();
 
       match /messages/{mid} {
         allow read: if signedIn();
-        // only allow the sender to create (expects { from, text, createdAt, ... })
+        // only allow the sender to create; createdAt must be server time
         allow create: if signedIn() &&
                       request.resource.data.from == request.auth.uid &&
                       request.resource.data.createdAt == request.time;
-        // disallow edits; allow delete by sender
+        // disallow edits
         allow update: if false;
+        // sender may delete their message
         allow delete: if signedIn() && resource.data.from == request.auth.uid;
       }
     }
 
-    /* ---------- likes (inbox/outbox or flat) ---------- */
+    /* ---------- likes (flat or inbox/outbox) ---------- */
     match /likes/{document=**} {
-      // keep it simple for now
       allow read, write: if signedIn();
     }
 
@@ -80,7 +83,13 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
-    /* ---------- fallback (read-only for signed in) ---------- */
+    /* ---------- interests catalog (read-only to clients) ---------- */
+    match /interests/{iid} {
+      allow read: if true;
+      allow write: if false; // set to false after you seed the list
+    }
+
+    /* ---------- fallback (read-only for signed-in) ---------- */
     match /{document=**} {
       allow read: if signedIn();
     }

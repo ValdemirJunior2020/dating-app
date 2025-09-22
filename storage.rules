@@ -1,16 +1,30 @@
+/* C:\your-project\storage.rules */
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function isSignedIn() { return request.auth != null; }
 
-    match /public_photos/{uid}/{allPaths=**} {
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Public photo files live here: users/{uid}/public_photos/{filename}
+    match /users/{uid}/public_photos/{fileId} {
+      // anyone can read public photo files
       allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == uid;
+
+      // only owner can upload/delete; images only; max 10MB
+      allow create: if isOwner(uid) &&
+                    request.resource.size < 10 * 1024 * 1024 &&
+                    request.resource.contentType.matches('image/.*');
+
+      allow delete: if isOwner(uid);
+
+      // forbid updates (replace by delete+create)
+      allow update: if false;
     }
 
-    match /avatars/{uid}/{allPaths=**} {
-      allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == uid;
+    // everything else: deny
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }
