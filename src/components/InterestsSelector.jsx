@@ -1,7 +1,6 @@
 // src/components/InterestsSelector.jsx
 import React, { useMemo, useRef, useState } from "react";
 
-/** Big catalog: campus, tech, hobbies, Christian/Bible, politics */
 export const INTEREST_CATALOG = [
   // Campus / Study / Tech
   "Study Sessions","Coding","AI/ML","Design","Entrepreneurship","Startups",
@@ -28,7 +27,7 @@ export const INTEREST_CATALOG = [
   "Youth Ministry","Mission Trips","Apologetics","Christian Fellowship",
   "Devotionals","Christian Books","Theology",
 
-  // Christian values / lifestyle (non-doctrinal tags)
+  // Christian values / lifestyle
   "Kindness","Service","Charity","Community","Forgiveness","Humility",
   "Stewardship","Chastity","Sobriety",
 
@@ -39,12 +38,11 @@ export const INTEREST_CATALOG = [
 
 const DEFAULT_SUGGESTIONS = INTEREST_CATALOG;
 
-/** Keep it ESLint-friendly; no unnecessary escapes */
 function sanitizeTag(s) {
   return String(s || "")
     .normalize("NFKC")
     .replace(/\s+/g, " ")
-    // Allow: letters (incl. many Latin accents), numbers, spaces, and & ' ! ? . -
+    // Allow letters (incl. extended Latin), numbers, spaces, and & ' ! ? . -
     .replace(/[^0-9A-Za-z\u00C0-\u024F\u1E00-\u1EFF &'!?.-]/g, "")
     .trim();
 }
@@ -141,7 +139,6 @@ export default function InterestsSelector({
 
       <div className="d-flex align-items-center justify-content-between mt-2">
         <div className="small text-white-50 fw-bold">{sel.size}/{max}</div>
-        {/* Explicit “Other…” pill to add custom interest */}
         <button
           type="button"
           className="btn btn-sm btn-warning rounded-pill fw-bold"
@@ -152,7 +149,6 @@ export default function InterestsSelector({
         </button>
       </div>
 
-      {/* Inline custom input */}
       {showOther && (
         <form
           onSubmit={confirmOther}

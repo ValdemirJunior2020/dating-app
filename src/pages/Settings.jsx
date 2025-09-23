@@ -23,7 +23,7 @@ export default function Settings() {
 
   // gallery
   const [photos, setPhotos] = useState([]);
-  const maxPhotos = 6; // change to 3 if you want a lower max
+  const maxPhotos = 6; // change to 3 if you prefer
 
   useEffect(() => {
     let unsub = () => {};
@@ -47,9 +47,7 @@ export default function Settings() {
   }, []);
 
   function compactStrings(arr) {
-    return (arr || [])
-      .map((x) => (x || "").trim())
-      .filter(Boolean);
+    return (arr || []).map((x) => (x || "").trim()).filter(Boolean);
   }
 
   async function onSaveProfile(e) {
@@ -178,7 +176,6 @@ export default function Settings() {
           {photos.map((p) => (
             <div key={p.id} className="card" style={{ borderRadius: 12, overflow: "hidden" }}>
               <div style={{ position: "relative", paddingTop: "100%", background: "#111" }}>
-                {/* square thumb */}
                 <img
                   src={p.url}
                   alt=""

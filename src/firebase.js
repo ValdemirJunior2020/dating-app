@@ -1,71 +1,24 @@
 // src/firebase.js
-
-// --- Core ---
 import { initializeApp } from "firebase/app";
-
-// --- Auth ---
-import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signOut,
-} from "firebase/auth";
-
-// --- Firestore ---
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-
-// --- Storage ---
 import { getStorage } from "firebase/storage";
-
-// --- App Check (reCAPTCHA v3) ---
+// ⬇️ keep these imports; we’ll guard initialization below
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
-/**
- * CRA uses REACT_APP_* vars at build time.
- * Make sure these exist in:
- *   - .env.local  (local dev)  and
- *   - Netlify env vars (then Clear cache & deploy)
- */
 const CFG = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET, // e.g. review-45013.firebasestorage.app
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
   measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID,
-  appCheckSiteKey: process.env.REACT_APP_APPCHECK_SITE_KEY, // optional
+  appCheckSiteKey: process.env.REACT_APP_APPCHECK_SITE_KEY, // your v3 site key
+  enableAppCheck: String(process.env.REACT_APP_ENABLE_APPCHECK || "").toLowerCase() === "true",
+  appCheckDebugToken: process.env.REACT_APP_APPCHECK_DEBUG_TOKEN || "", // optional
 };
 
-// Helpful validation: fail early if the critical ones are missing
-(function assertConfig() {
-  const missing = [];
-  if (!CFG.apiKey) missing.push("REACT_APP_FIREBASE_API_KEY");
-  if (!CFG.authDomain) missing.push("REACT_APP_FIREBASE_AUTH_DOMAIN");
-  if (!CFG.projectId) missing.push("REACT_APP_FIREBASE_PROJECT_ID");
-  if (!CFG.storageBucket) missing.push("REACT_APP_FIREBASE_STORAGE_BUCKET");
-  if (!CFG.appId) missing.push("REACT_APP_FIREBASE_APP_ID");
-
-  if (missing.length) {
-    // eslint-disable-next-line no-console
-    console.error(
-      "❌ Missing required Firebase env vars:\n" +
-        missing.map((k) => `  - ${k}`).join("\n") +
-        "\n\nCreate .env.local in project root with lines like:\n" +
-        "REACT_APP_FIREBASE_API_KEY=AIza...\n" +
-        "REACT_APP_FIREBASE_AUTH_DOMAIN=review-45013.firebaseapp.com\n" +
-        "REACT_APP_FIREBASE_PROJECT_ID=review-45013\n" +
-        "REACT_APP_FIREBASE_STORAGE_BUCKET=review-45013.firebasestorage.app\n" +
-        "REACT_APP_FIREBASE_MESSAGING_SENDER_ID=...\n" +
-        "REACT_APP_FIREBASE_APP_ID=1:...:web:...\n" +
-        "(then stop and restart npm start)"
-    );
-  }
-})();
-
-// Initialize Firebase
 export const app = initializeApp({
   apiKey: CFG.apiKey,
   authDomain: CFG.authDomain,
@@ -76,67 +29,48 @@ export const app = initializeApp({
   measurementId: CFG.measurementId,
 });
 
-// Debug what the app is actually using
-if (typeof window !== "undefined") {
-  const mask = (s) => (s ? String(s).slice(0, 6) + "…" : s);
-  // eslint-disable-next-line no-console
-  console.log("[APP-OPTIONS]", {
-    apiKey: mask(app.options.apiKey),
-    authDomain: app.options.authDomain,
-    projectId: app.options.projectId,
-    storageBucket: app.options.storageBucket,
-    appId: mask(app.options.appId),
-  });
-  if (!app.options.apiKey) {
-    console.error("❌ apiKey is empty in runtime. CRA didn’t inject your env vars.");
-  }
-  if (String(app.options.storageBucket).endsWith(".appspot.com")) {
-    console.warn(
-      "⚠️ storageBucket looks like appspot.com — for your project it should be review-45013.firebasestorage.app"
-    );
-  }
-}
-
-// Services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// App Check
-if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
-  // Allow local dev without a site key
-  // eslint-disable-next-line no-underscore-dangle
-  window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-}
-
-if (CFG.appCheckSiteKey && typeof window !== "undefined") {
-  // Only init if a real site key exists
-  try {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(CFG.appCheckSiteKey),
-      isTokenAutoRefreshEnabled: true,
-    });
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("App Check init skipped:", e?.message || e);
+// ---- App Check (optional) ----
+try {
+  if (CFG.enableAppCheck && typeof window !== "undefined") {
+    // dev debug token if you want: put that UUID from the console into .env
+    if (CFG.appCheckDebugToken) {
+      // eslint-disable-next-line no-underscore-dangle
+      window.FIREBASE_APPCHECK_DEBUG_TOKEN = CFG.appCheckDebugToken;
+      console.info("[AppCheck] using debug token");
+    }
+    if (!CFG.appCheckSiteKey) {
+      console.warn("[AppCheck] enabled but REACT_APP_APPCHECK_SITE_KEY is empty; skipping.");
+    } else {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(CFG.appCheckSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+      console.info("[AppCheck] initialized");
+    }
+  } else {
+    console.info("[AppCheck] disabled");
   }
+} catch (e) {
+  console.warn("[AppCheck] init skipped:", e?.message || e);
 }
 
-// Auth helpers
+// ---- auth helpers (unchanged) ----
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   return signInWithPopup(auth, provider);
 }
-
 export async function emailSignIn(email, password) {
   return signInWithEmailAndPassword(auth, email, password);
 }
-
 export async function sendReset(email) {
   return sendPasswordResetEmail(auth, email);
 }
-
 export async function logOut() {
   return signOut(auth);
 }
+export default app;

@@ -25,10 +25,6 @@ export async function getMyProfile() {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/**
- * Merge partial fields into the user's document.
- * Examples: { displayName }, { bio }, { interests: [...] }
- */
 export async function updateMyProfile(partial) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("Not signed in");
@@ -42,7 +38,6 @@ export async function updateMyProfile(partial) {
 
 /** ----------------- Public Photos ----------------- **/
 
-// realtime gallery listener
 export function listenMyPublicPhotos(cb) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("Not signed in");
@@ -55,24 +50,13 @@ export function listenMyPublicPhotos(cb) {
   });
 }
 
-/**
- * Upload a file to Storage, then create a Firestore doc in:
- * /users/{uid}/public_photos/{pid}
- *
- * NOTE: Firestore rules for public_photos only allow
- * { owner, url, createdAt, updatedAt, caption }.
- * Do NOT write extra fields.
- */
 export async function addPublicPhoto(file, { caption = "" } = {}) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("Not signed in");
 
-  // Simple limit: max 6 items (change if you want 3)
   const colRef = collection(db, "users", uid, "public_photos");
   const current = await getDocCount(colRef);
-  if (current >= 6) {
-    throw new Error("You can upload at most 6 photos.");
-  }
+  if (current >= 6) throw new Error("You can upload at most 6 photos.");
 
   const path = `users/${uid}/public/${Date.now()}_${file.name}`;
   const sref = ref(storage, path);
@@ -99,12 +83,9 @@ export async function deletePublicPhotoDoc(photo) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("Not signed in");
   if (!photo?.id) throw new Error("Missing photo id");
-  // Firestore rules allow owner to delete the doc.
-  // (We are not deleting the Storage file here to keep rules simple.)
   await deleteDoc(doc(db, "users", uid, "public_photos", photo.id));
 }
 
-/** Optional: mark a photo as main (stores on user doc) */
 export async function setMainPhoto(url) {
   await updateMyProfile({ photoURL: url });
 }
