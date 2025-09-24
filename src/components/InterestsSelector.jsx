@@ -1,49 +1,17 @@
 // src/components/InterestsSelector.jsx
 import React, { useMemo, useRef, useState } from "react";
 
-export const INTEREST_CATALOG = [
-  // Campus / Study / Tech
-  "Study Sessions","Coding","AI/ML","Design","Entrepreneurship","Startups",
-  "Hackathons","Open Source","Robotics","Math","Physics","Chemistry","Biology",
-  "Economics","Finance","Marketing","Psychology","Philosophy",
-
-  // Sports & Fitness
-  "Basketball","Soccer","Gym","Running","Yoga","Pilates","Swimming","Hiking",
-  "Tennis","Pickleball","Cycling","Martial Arts",
-
-  // Gaming / Anime
-  "Gaming","Esports","Anime","Manga","Tabletop RPG","Board Games","Chess",
-
-  // Arts & Media
-  "Photography","Content Creation","Music","Guitar","Piano","Singing","DJing",
-  "Podcasts","Movies","Filmmaking","Theater","Poetry","Writing","Reading",
-
-  // Social
-  "Volunteering","Campus Events","Travel","Cooking","Baking","Coffee","Tea",
-  "Pets","Language Exchange","Outdoors","Camping","Beach",
-
-  // Faith (Christian)
-  "Faith","Bible Study","Prayer","Church","Worship Music","Christian Podcasts",
-  "Youth Ministry","Mission Trips","Apologetics","Christian Fellowship",
-  "Devotionals","Christian Books","Theology",
-
-  // Christian values / lifestyle
-  "Kindness","Service","Charity","Community","Forgiveness","Humility",
-  "Stewardship","Chastity","Sobriety",
-
-  // Politics (neutral labels)
-  "Politics","Conservative","Liberal","Moderate","Libertarian","Independent",
-  "Non-Political","Civic Engagement",
+const DEFAULT_SUGGESTIONS = [
+  "Study Sessions","Coding","AI/ML","Design","Entrepreneurship","Basketball","Soccer","Gym",
+  "Running","Yoga","Gaming","Esports","Anime","Photography","Content Creation","Music","Guitar",
+  "Piano","Singing","Podcasts","Volunteering","Campus Events","Movies","Cooking","Travel",
+  "Coffee","Pets","Language Exchange","Board Games","Reading","Faith","Bible","Outdoors",
 ];
-
-const DEFAULT_SUGGESTIONS = INTEREST_CATALOG;
 
 function sanitizeTag(s) {
   return String(s || "")
-    .normalize("NFKC")
     .replace(/\s+/g, " ")
-    // Allow letters (incl. extended Latin), numbers, spaces, and & ' ! ? . -
-    .replace(/[^0-9A-Za-z\u00C0-\u024F\u1E00-\u1EFF &'!?.-]/g, "")
+    .replace(/[^\p{L}\p{N}\-\s&'!?.]/gu, "")
     .trim();
 }
 
@@ -77,8 +45,7 @@ export default function InterestsSelector({
     setSelected(next);
   }
 
-  function addFromInput(e) {
-    e.preventDefault();
+  function addFromSearch() {
     setError("");
     const t = sanitizeTag(search);
     if (!t) return;
@@ -89,6 +56,13 @@ export default function InterestsSelector({
     next.add(t);
     setSelected(next);
     setSearch("");
+  }
+
+  function onSearchKeyDown(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addFromSearch();
+    }
   }
 
   function openOther() {
@@ -104,8 +78,7 @@ export default function InterestsSelector({
     setError("");
   }
 
-  function confirmOther(e) {
-    e?.preventDefault?.();
+  function confirmOther() {
     setError("");
     const t = sanitizeTag(otherVal);
     if (!t) return setError("Type something first.");
@@ -127,15 +100,23 @@ export default function InterestsSelector({
 
   return (
     <div>
-      {/* Search/Add bar */}
-      <form onSubmit={addFromInput}>
+      {/* Search/Add bar (no form) */}
+      <div className="d-flex" style={{ gap: 8 }}>
         <input
           className="form-control"
           placeholder="Search or press Enter to add…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={onSearchKeyDown}
         />
-      </form>
+        <button
+          type="button"
+          className="btn btn-primary fw-bold"
+          onClick={addFromSearch}
+        >
+          Add
+        </button>
+      </div>
 
       <div className="d-flex align-items-center justify-content-between mt-2">
         <div className="small text-white-50 fw-bold">{sel.size}/{max}</div>
@@ -149,9 +130,9 @@ export default function InterestsSelector({
         </button>
       </div>
 
+      {/* Inline custom input (no form) */}
       {showOther && (
-        <form
-          onSubmit={confirmOther}
+        <div
           className="card mt-2"
           style={{
             padding: 10,
@@ -165,12 +146,18 @@ export default function InterestsSelector({
             <input
               ref={otherInputRef}
               className="form-control"
-              placeholder="Type here (e.g., Bible Study Group)"
+              placeholder="Type here (e.g., Candle Making)"
               value={otherVal}
               onChange={(e) => setOtherVal(e.target.value)}
               maxLength={40}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  confirmOther();
+                }
+              }}
             />
-            <button type="submit" className="btn btn-primary fw-bold">
+            <button type="button" className="btn btn-primary fw-bold" onClick={confirmOther}>
               Add
             </button>
             <button type="button" className="btn btn-outline-light fw-bold" onClick={cancelOther}>
@@ -178,7 +165,7 @@ export default function InterestsSelector({
             </button>
           </div>
           {error && <div className="text-danger mt-2 fw-bold">{error}</div>}
-        </form>
+        </div>
       )}
 
       {/* Suggestions grid */}

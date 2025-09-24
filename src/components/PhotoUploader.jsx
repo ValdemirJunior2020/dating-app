@@ -1,20 +1,21 @@
 // src/components/PhotoUploader.jsx
 import React, { useRef, useState } from "react";
-import { getAuth } from "firebase/auth";
-import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
 import Lightbox from "./Lightbox";
 import { detectFaceInFile } from "../utils/faceCheck";
+
+// ⬇️ use the single initialized Firebase app you already export
+import { auth, db, storage } from "../firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /**
  * Props:
  *  - value: string[]            // photo URLs
  *  - onChange: (string[]) => void
- *  - max?: number               // default 6
+ *  - max?: number               // default 3
  */
-export default function PhotoUploader({ value = [], onChange, max = 6 }) {
-  const auth = getAuth();
+export default function PhotoUploader({ value = [], onChange, max = 3 }) {
   const uid = auth.currentUser?.uid || "anon";
-  const storage = getStorage();
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -39,7 +40,8 @@ export default function PhotoUploader({ value = [], onChange, max = 6 }) {
     const files = Array.from(e.target.files || []).filter((f) =>
       f.type.startsWith("image/")
     );
-    e.target.value = ""; // allow re-selecting same file next time
+    // allow re-selecting the same file next time
+    e.target.value = "";
     if (!files.length) return;
 
     // Enforce max
@@ -48,32 +50,55 @@ export default function PhotoUploader({ value = [], onChange, max = 6 }) {
       return;
     }
 
+    // only process up to remaining slots
+    const remaining = Math.max(0, max - photos.length);
+    const toProcess = files.slice(0, remaining);
+
     setBusy(true);
     try {
-      const uploads = [];
-      for (const file of files) {
-        // Simple person check
-        const face = await detectFaceInFile(file);
-        if (face.supported && face.hasFace === false) {
-          setErr("Please upload a photo where a person's face is visible.");
-          continue; // skip this file
+      const uploadedUrls = [];
+
+      for (const file of toProcess) {
+        // Optional: skip images with no visible face (if supported by your util)
+        try {
+          const face = await detectFaceInFile(file);
+          if (face?.supported && face.hasFace === false) {
+            setErr("Please upload a photo where a person's face is visible.");
+            continue;
+          }
+        } catch {
+          // face check failure shouldn’t block uploads
         }
 
-        // Upload to Storage
-        const safe = file.name.replace(/[^\w.-]+/g, "_").slice(-80); // <- no-useless-escape fixed
-        const path = `user-uploads/${uid}/${Date.now()}_${safe}`;
-        const r = ref(storage, path);
-        await uploadBytes(r, file, { contentType: file.type });
-        const url = await getDownloadURL(r);
-        uploads.push(url);
-        if (photos.length + uploads.length >= max) break;
+        // Upload to Storage: user-uploads/{uid}/{timestamp}_{sanitizedFile}
+        const safe = file.name.replace(/[^\w.-]+/g, "_").slice(-80);
+        const path = `public_photos/${uid}/${Date.now()}_${safe}`;
+        const sRef = ref(storage, path);
+        await uploadBytes(sRef, file, { contentType: file.type });
+        const url = await getDownloadURL(sRef);
+
+        // Create Firestore doc in /users/{uid}/public_photos
+        try {
+          await addDoc(collection(db, "users", uid, "public_photos"), {
+            owner: uid,
+            url,
+            caption: "",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } catch (firestoreErr) {
+          // don’t fail the whole flow if doc write fails; keep the image usable
+          console.warn("public_photos doc write failed:", firestoreErr);
+        }
+
+        uploadedUrls.push(url);
       }
 
-      if (uploads.length) {
-        onChange?.([...photos, ...uploads]);
+      if (uploadedUrls.length) {
+        onChange?.([...photos, ...uploadedUrls]);
       }
-    } catch (e) {
-      console.error("PhotoUploader upload:", e);
+    } catch (e1) {
+      console.error("PhotoUploader upload:", e1);
       setErr("Upload failed. Try a different image.");
     } finally {
       setBusy(false);
@@ -97,7 +122,9 @@ export default function PhotoUploader({ value = [], onChange, max = 6 }) {
         >
           + Add picture
         </button>
-        {busy && <span className="text-muted">Uploading…</span>}
+        <span className="text-muted">
+          {photos.length}/{max} {busy ? "· Uploading…" : null}
+        </span>
       </div>
 
       <input
@@ -118,8 +145,11 @@ export default function PhotoUploader({ value = [], onChange, max = 6 }) {
             <div key={src} style={{ position: "relative" }}>
               <button
                 type="button"
-                aria-label={`Open upload ${i + 1}`}  // accessible name on button
-                onClick={() => { setViewerStart(i); setViewerOpen(true); }}
+                aria-label={`Open upload ${i + 1}`}
+                onClick={() => {
+                  setViewerStart(i);
+                  setViewerOpen(true);
+                }}
                 title="Click to enlarge"
                 style={{
                   width: 120,
@@ -135,8 +165,8 @@ export default function PhotoUploader({ value = [], onChange, max = 6 }) {
               >
                 <img
                   src={src}
-                  alt=""                // <- no “photo/image/picture” word; decorative
-                  aria-hidden="true"    // <- screen readers use the button label instead
+                  alt=""
+                  aria-hidden="true"
                   style={{
                     width: "100%",
                     height: "100%",
