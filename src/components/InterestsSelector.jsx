@@ -1,6 +1,7 @@
 // src/components/InterestsSelector.jsx
 import React, { useMemo, useRef, useState } from "react";
 
+/** Default suggestion pool */
 const DEFAULT_SUGGESTIONS = [
   "Study Sessions","Coding","AI/ML","Design","Entrepreneurship","Basketball","Soccer","Gym",
   "Running","Yoga","Gaming","Esports","Anime","Photography","Content Creation","Music","Guitar",
@@ -8,6 +9,7 @@ const DEFAULT_SUGGESTIONS = [
   "Coffee","Pets","Language Exchange","Board Games","Reading","Faith","Bible","Outdoors",
 ];
 
+/** Keep letters/numbers and a few symbols; collapse spaces */
 function sanitizeTag(s) {
   return String(s || "")
     .replace(/\s+/g, " ")
@@ -15,11 +17,20 @@ function sanitizeTag(s) {
     .trim();
 }
 
+/**
+ * Props:
+ *  - value?: string[]
+ *  - onChange?: (string[]) => void
+ *  - suggestions?: string[]
+ *  - max?: number
+ *  - placeholder?: string
+ */
 export default function InterestsSelector({
   value = [],
   onChange = () => {},
   suggestions = DEFAULT_SUGGESTIONS,
   max = 30,
+  placeholder = "Search or press Enter to add…",
 }) {
   const sel = useMemo(
     () => new Set((value || []).map((s) => sanitizeTag(s)).filter(Boolean)),
@@ -45,6 +56,7 @@ export default function InterestsSelector({
     setSelected(next);
   }
 
+  /** Add from the top search input */
   function addFromSearch() {
     setError("");
     const t = sanitizeTag(search);
@@ -58,6 +70,7 @@ export default function InterestsSelector({
     setSearch("");
   }
 
+  /** Handle Enter on the search input without using a <form> */
   function onSearchKeyDown(e) {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -100,11 +113,11 @@ export default function InterestsSelector({
 
   return (
     <div>
-      {/* Search/Add bar (no form) */}
-      <div className="d-flex" style={{ gap: 8 }}>
+      {/* Top search / add row (NO <form>) */}
+      <div className="d-flex align-items-center gap-2">
         <input
           className="form-control"
-          placeholder="Search or press Enter to add…"
+          placeholder={placeholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={onSearchKeyDown}
@@ -113,16 +126,18 @@ export default function InterestsSelector({
           type="button"
           className="btn btn-primary fw-bold"
           onClick={addFromSearch}
+          disabled={!search.trim()}
+          title="Add as a custom interest"
         >
           Add
         </button>
       </div>
 
       <div className="d-flex align-items-center justify-content-between mt-2">
-        <div className="small text-white-50 fw-bold">{sel.size}/{max}</div>
+        <div className="small text-muted fw-bold">{sel.size}/{max}</div>
         <button
           type="button"
-          className="btn btn-sm btn-warning rounded-pill fw-bold"
+          className="btn btn-sm btn-outline-secondary rounded-pill fw-bold"
           onClick={openOther}
           disabled={sel.size >= max}
         >
@@ -130,15 +145,15 @@ export default function InterestsSelector({
         </button>
       </div>
 
-      {/* Inline custom input (no form) */}
+      {/* Inline “Other” panel (NO <form>) */}
       {showOther && (
         <div
           className="card mt-2"
           style={{
             padding: 10,
             borderRadius: 12,
-            background: "rgba(0,0,0,0.25)",
-            border: "1px solid rgba(255,255,255,0.35)",
+            background: "rgba(0,0,0,0.03)",
+            border: "1px solid rgba(0,0,0,0.1)",
           }}
         >
           <label className="form-label mb-1">Add a custom interest</label>
@@ -160,7 +175,7 @@ export default function InterestsSelector({
             <button type="button" className="btn btn-primary fw-bold" onClick={confirmOther}>
               Add
             </button>
-            <button type="button" className="btn btn-outline-light fw-bold" onClick={cancelOther}>
+            <button type="button" className="btn btn-outline-secondary fw-bold" onClick={cancelOther}>
               Cancel
             </button>
           </div>
@@ -168,7 +183,7 @@ export default function InterestsSelector({
         </div>
       )}
 
-      {/* Suggestions grid */}
+      {/* Suggestions grid with visible chips */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }} className="mt-3">
         {visible.map((tag) => {
           const on = sel.has(tag);
@@ -177,7 +192,7 @@ export default function InterestsSelector({
               key={tag}
               type="button"
               onClick={() => toggle(tag)}
-              className={`btn btn-sm rounded-pill ${on ? "btn-warning" : "btn-outline-light"}`}
+              className={`btn btn-sm rounded-pill ${on ? "btn-primary" : "btn-outline-secondary"}`}
               style={{ fontWeight: 800 }}
             >
               {tag}
