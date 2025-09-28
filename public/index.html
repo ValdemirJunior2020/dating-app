@@ -32,6 +32,16 @@
   }
   try { localStorage.removeItem('firebase:appCheckDebugToken'); } catch (e) {}
 </script>
+<script>
+  (function () {
+    const m = new Date().getMonth() + 1;
+    let s = "winter";
+    if (m >= 3 && m <= 5) s = "spring";
+    else if (m >= 6 && m <= 8) s = "summer";
+    else if (m >= 9 && m <= 11) s = "fall";
+    document.documentElement.setAttribute("data-season", s);
+  })();
+</script>
 
   </body>
 </html>
