@@ -4,7 +4,7 @@ import { useLocation, Navigate, Link, useNavigate } from "react-router-dom";
 import { signInWithGoogle, auth } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { sendEmailVerification } from "firebase/auth";
-import BrandName from "../components/BrandName"; // cursive "Candle Love"
+import BrandName from "../components/BrandName";
 
 const friendly = (code) => {
   switch (code) {
@@ -15,7 +15,7 @@ const friendly = (code) => {
     case "auth/popup-closed-by-user":
       return "Sign-in popup closed. Please try again.";
     case "auth/invalid-continue-uri":
-      return "The continue URL is not allowed. Make sure your live domain is in Firebase Auth → Authorized domains.";
+      return "The continue URL is not allowed. Add your live domain in Firebase Auth → Authorized domains.";
     default:
       return "Sign-in failed. Please try again.";
   }
@@ -51,7 +51,8 @@ export default function Login() {
   }
 
   async function resendVerification() {
-    setMsg(""); setErr("");
+    setMsg("");
+    setErr("");
     try {
       if (!auth.currentUser) {
         setErr("You must log in with email/password first.");
@@ -61,7 +62,7 @@ export default function Login() {
         setMsg("Your email is already verified.");
         return;
       }
-      // IMPORTANT: use your CURRENT domain so Firebase won't throw auth/invalid-continue-uri
+      // IMPORTANT: use current live origin so it's always an Authorized Domain
       await sendEmailVerification(auth.currentUser, {
         url: `${window.location.origin}/login`,
         handleCodeInApp: true,
