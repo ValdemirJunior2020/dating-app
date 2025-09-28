@@ -6,6 +6,8 @@ import {
   browserLocalPersistence,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -55,9 +57,13 @@ if (enableAppCheck && recaptchaSiteKey) {
   }
 }
 
-// ---- Exports used by the app ----
+// ---- Exported helpers (match your imports across the app) ----
 export const googleProvider = new GoogleAuthProvider();
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 
-// **This fixes the build error**: provide the missing named export.
+export const emailSignIn = (email, password) =>
+  signInWithEmailAndPassword(auth, email, password);
+
+export const sendReset = (email) => sendPasswordResetEmail(auth, email);
+
 export const logOut = () => signOut(auth);
