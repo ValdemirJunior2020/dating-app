@@ -14,9 +14,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
-// ---- Firebase config from your .env ----
-// Make sure all of these exist with the REACT_APP_ prefix
-// and restart `npm start` after any .env change.
+// ----- Firebase config (Netlify envs; CRA exposes only REACT_APP_*) -----
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
@@ -24,55 +22,53 @@ const firebaseConfig = {
   storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  // Optional:
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID, // optional
 };
 
-// ---- Init core SDKs ----
-const app = initializeApp(firebaseConfig);
-export default app;
+export const app = initializeApp(firebaseConfig);
 
+// ----- Auth (persist across reloads) -----
 export const auth = getAuth(app);
 auth.useDeviceLanguage();
-// Persist auth across tabs/reloads
-setPersistence(auth, browserLocalPersistence);
+setPersistence(auth, browserLocalPersistence).catch((e) =>
+  console.warn("[Auth] setPersistence warning:", e?.message || e)
+);
 
+// ----- Firestore & Storage -----
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// ---- Providers & helpers your app imports ----
+// ----- App Check (reCAPTCHA v3) -----
+// Netlify envs:
+//   REACT_APP_ENABLE_APPCHECK=true
+//   REACT_APP_RECAPTCHA_SITE_KEY=<App Check reCAPTCHA v3 **site** key>
+const enableAppCheck =
+  String(process.env.REACT_APP_ENABLE_APPCHECK || "").toLowerCase() === "true";
+const recaptchaSiteKey = process.env.REACT_APP_RECAPTCHA_SITE_KEY;
+
+if (enableAppCheck && recaptchaSiteKey) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (e) {
+    console.warn("[AppCheck] init failed:", e?.message || e);
+  }
+} else if (process.env.NODE_ENV === "production") {
+  console.warn(
+    "[AppCheck] Skipped. enable=",
+    enableAppCheck,
+    " siteKey=",
+    !!recaptchaSiteKey
+  );
+}
+
+// ----- Providers & helpers -----
 export const googleProvider = new GoogleAuthProvider();
 
-export const signInWithGoogle = async () => {
-  // Popup sign-in
-  return await signInWithPopup(auth, googleProvider);
-};
-
+export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 export const emailSignIn = (email, password) =>
   signInWithEmailAndPassword(auth, email, password);
-
 export const sendReset = (email) => sendPasswordResetEmail(auth, email);
-
 export const logOut = () => signOut(auth);
-
-// ---- App Check (disable in dev to avoid 403 debug-token errors) ----
-const appCheckSiteKey = process.env.REACT_APP_APPCHECK_SITE_KEY;
-
-// Only enable App Check in production. This prevents the 403 spam in local dev.
-if (process.env.NODE_ENV === "production" && appCheckSiteKey) {
-  initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(appCheckSiteKey),
-    isTokenAutoRefreshEnabled: true,
-  });
-}
-// If you want App Check in dev, register a debug token in Console and
-// then enable it here (avoid using `self` to keep ESLint happy).
-// Example:
-// if (process.env.NODE_ENV !== "production") {
-//   // window is OK in the browser and won’t trigger the 'self' ESLint rule
-//   window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-//   initializeAppCheck(app, {
-//     provider: new ReCaptchaV3Provider(appCheckSiteKey),
-//     isTokenAutoRefreshEnabled: true,
-//   });
-// }

@@ -1,62 +1,14 @@
-/*
-  # Security baseline
-  Cross-Origin-Opener-Policy: same-origin-allow-popups
-  Referrer-Policy: strict-origin-when-cross-origin
-  X-Content-Type-Options: nosniff
+﻿ /*
+   Cross-Origin-Opener-Policy: same-origin-allow-popups
+   Referrer-Policy: strict-origin-when-cross-origin
+   X-Content-Type-Options: nosniff
+   Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firestore.googleapis.com https://firebasestorage.googleapis.com https://firebaseinstallations.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://www.google-analytics.com https://region1.google-analytics.com https://api.stripe.com https://content-firebaseappcheck.googleapis.com; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://www.recaptcha.net https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; frame-src https://www.google.com https://www.recaptcha.net https://accounts.google.com https://js.stripe.com https://hooks.stripe.com; media-src 'self' https://firebasestorage.googleapis.com
 
-  # Content Security Policy for Firebase + Stripe + Bootstrap
-  Content-Security-Policy:
-    default-src 'self';
-    base-uri 'self';
-    object-src 'none';
+ /index.html
+   Cache-Control: no-cache, no-store, must-revalidate
 
-    # Allow Firebase connections (Auth, Firestore, Storage, Installations)
-    connect-src 'self'
-      https://identitytoolkit.googleapis.com
-      https://securetoken.googleapis.com
-      https://www.googleapis.com
-      https://firestore.googleapis.com
-      https://firebasestorage.googleapis.com
-      https://firebaseinstallations.googleapis.com
-      https://oauth2.googleapis.com
-      https://accounts.google.com
-      https://www.google-analytics.com
-      https://region1.google-analytics.com
-      https://api.stripe.com;
+ /*.html
+   Cache-Control: no-cache, no-store, must-revalidate
 
-    # Scripts (Firebase, Google OAuth, Stripe)
-    script-src 'self' 'unsafe-inline'
-      https://www.gstatic.com
-      https://www.google.com
-      https://js.stripe.com;
-
-    # Styles (Bootstrap inline)
-    style-src 'self' 'unsafe-inline';
-
-    # Images (user uploads + firebase + gstatic + Google’s cleardot)
-    img-src 'self' data:
-      https://firebasestorage.googleapis.com
-      https://*.gstatic.com
-      https://www.google.com;
-
-    # Fonts if you ever use Google Fonts
-    font-src 'self' https://fonts.gstatic.com data:;
-
-    # Iframes (Google OAuth / Stripe)
-    frame-src
-      https://www.google.com
-      https://accounts.google.com
-      https://js.stripe.com
-      https://hooks.stripe.com;
-
-    # Media from Storage (if you render uploaded videos)
-    media-src 'self' https://firebasestorage.googleapis.com;
-
-/index.html
-  Cache-Control: no-cache, no-store, must-revalidate
-
-/*.html
-  Cache-Control: no-cache, no-store, must-revalidate
-
-/service-worker.js
-  Cache-Control: no-store
+ /service-worker.js
+   Cache-Control: no-store
