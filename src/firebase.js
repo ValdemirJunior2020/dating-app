@@ -4,12 +4,15 @@ import {
   getAuth,
   setPersistence,
   browserLocalPersistence,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
-// ---- Firebase config from Netlify env (CRA exposes only REACT_APP_*) ----
+// ---- Firebase config via env ----
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN, // e.g. review-45013.firebaseapp.com
@@ -22,29 +25,21 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 
-// Sanity log in prod: confirm envs resolved and domain matches expectations
-// You can remove this after verifying in the browser console.
+// sanity log (remove after verifying in prod)
 try {
-  // eslint-disable-next-line no-console
   console.log("[FB]", app.options.projectId, app.options.authDomain, window.location.origin);
 } catch {}
 
-// Auth
 export const auth = getAuth(app);
 auth.useDeviceLanguage();
 setPersistence(auth, browserLocalPersistence).catch((e) =>
   console.warn("[Auth] setPersistence warning:", e?.message || e)
 );
 
-// Firestore & Storage
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// ---- Optional: App Check (reCAPTCHA v3) ----
-// Netlify envs expected if you enable this:
-//   REACT_APP_ENABLE_APPCHECK=true
-//   REACT_APP_RECAPTCHA_SITE_KEY=<App Check reCAPTCHA v3 **site** key>
-// Keep it false until your deployment is stable to avoid 400 throttle loops.
+// ---- App Check (optional; enable after site is stable) ----
 const enableAppCheck =
   String(process.env.REACT_APP_ENABLE_APPCHECK || "").toLowerCase() === "true";
 const recaptchaSiteKey = process.env.REACT_APP_RECAPTCHA_SITE_KEY;
@@ -60,5 +55,9 @@ if (enableAppCheck && recaptchaSiteKey) {
   }
 }
 
-// ---- Google provider helper exported here if you use popup sign-in elsewhere ----
-export { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+// ---- Exports used by the app ----
+export const googleProvider = new GoogleAuthProvider();
+export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
+
+// **This fixes the build error**: provide the missing named export.
+export const logOut = () => signOut(auth);
