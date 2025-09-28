@@ -14,6 +14,8 @@ const friendly = (code) => {
       return "Your browser blocked the popup. Allow popups or try again.";
     case "auth/popup-closed-by-user":
       return "Sign-in popup closed. Please try again.";
+    case "auth/invalid-continue-uri":
+      return "The continue URL is not allowed. Make sure your live domain is in Firebase Auth → Authorized domains.";
     default:
       return "Sign-in failed. Please try again.";
   }
@@ -38,9 +40,9 @@ export default function Login() {
   async function handleGoogle() {
     try {
       await signInWithGoogle();
-    } catch (err) {
-      alert(friendly(err.code));
-      console.error(err);
+    } catch (e) {
+      console.error(e);
+      alert(friendly(e?.code));
     }
   }
 
@@ -59,13 +61,15 @@ export default function Login() {
         setMsg("Your email is already verified.");
         return;
       }
+      // IMPORTANT: use your CURRENT domain so Firebase won't throw auth/invalid-continue-uri
       await sendEmailVerification(auth.currentUser, {
-        url: "https://yourapp.web.app/login"
+        url: `${window.location.origin}/login`,
+        handleCodeInApp: true,
       });
       setMsg("Verification email sent! Check your inbox.");
     } catch (e) {
       console.error(e);
-      setErr(e.message || "Failed to send verification email.");
+      setErr(e?.message || "Failed to send verification email.");
     }
   }
 
