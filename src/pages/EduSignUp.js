@@ -1,102 +1,93 @@
 // src/pages/EduSignUp.jsx
-import React, { useState } from "react";
-import { auth, db } from "../firebase";
+import React, { useEffect, useState } from "react";
+import { db } from "../firebase"; // removed: auth
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { sendEduOtp, verifyEduOtp } from "../services/edu";
+import { sendEduLink, completeEduLinkIfPresent } from "../lib/eduAuth";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export default function EduSignUp() {
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [step, setStep] = useState("enter"); // enter | sent | verified
   const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const [sent, setSent] = useState(false);
 
-  async function handleSend() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || "/browse";
+
+  // If opened from the email link, complete the sign-in
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = await completeEduLinkIfPresent();
+        if (user) {
+          await setDoc(
+            doc(db, "users", user.uid),
+            {
+              eduVerified: true,
+              verification: { college: true },
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+          setMsg("You're verified and signed in with your .edu email.");
+          navigate(from, { replace: true });
+        }
+      } catch (e) {
+        console.error(e);
+        setErr(e.message || "Failed to complete email link sign-in.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleSend(e) {
+    e.preventDefault();
     setMsg("");
-    const e = email.trim().toLowerCase();
-    if (!e.endsWith(".edu")) {
-      setMsg("Please enter a valid .edu email.");
+    setErr("");
+
+    const eaddr = email.trim().toLowerCase();
+    if (!/\.edu$/i.test(eaddr)) {
+      setErr("Please enter a valid .edu email.");
       return;
     }
-    const res = await sendEduOtp(e);
-    if (res.ok) {
-      setStep("sent");
-      setMsg(res.message || "Code sent. Check your inbox.");
-    } else {
-      setMsg(res.error || "Failed to send code.");
-    }
-  }
 
-  async function handleVerify() {
-    setMsg("");
-    const e = email.trim().toLowerCase();
-    const c = code.trim();
-    const res = await verifyEduOtp(e, c);
-    if (res.ok) {
-      // mark the user as verified for convenience
-      const u = auth.currentUser;
-      if (u) {
-        await setDoc(
-          doc(db, "users", u.uid),
-          { eduVerified: true, verification: { college: true }, updatedAt: serverTimestamp() },
-          { merge: true }
-        );
-      }
-      setStep("verified");
-      setMsg("Email verified! You can now browse.");
-    } else {
-      setMsg(res.error || "Invalid code.");
+    try {
+      await sendEduLink(eaddr);
+      setSent(true);
+      setMsg("Check your .edu inbox and click the sign-in link.");
+    } catch (e2) {
+      console.error(e2);
+      setErr(e2.message || "Failed to send the .edu sign-in link.");
     }
   }
 
   return (
-    <div className="container py-4">
+    <div className="container py-4" style={{ maxWidth: 520 }}>
       <h2 className="mb-3">Verify your .edu email</h2>
 
-      {step !== "verified" && (
-        <>
-          <div className="mb-3">
-            <label className="form-label">.edu email</label>
-            <input
-              className="form-control"
-              placeholder="you@yourcollege.edu"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
+      <form onSubmit={handleSend}>
+        <label className="form-label">.edu email</label>
+        <input
+          className="form-control"
+          type="email"
+          placeholder="you@yourcollege.edu"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
 
-          {step === "enter" && (
-            <button className="btn btn-primary" onClick={handleSend}>
-              Send code
-            </button>
-          )}
+        <button className="btn btn-primary mt-3" type="submit">
+          {sent ? "Resend link" : "Send link"}
+        </button>
+      </form>
 
-          {step === "sent" && (
-            <>
-              <div className="mb-3 mt-3">
-                <label className="form-label">6-digit code</label>
-                <input
-                  className="form-control"
-                  placeholder="123456"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
-              </div>
-              <button className="btn btn-success" onClick={handleVerify}>
-                Verify
-              </button>
-              <button className="btn btn-link ms-2" onClick={handleSend}>
-                Resend code
-              </button>
-            </>
-          )}
-        </>
-      )}
+      <p className="text-muted mt-3">
+        We’ll email you a sign-in link. Opening it proves you control that .edu inbox.
+      </p>
 
-      {step === "verified" && (
-        <a href="/browse" className="btn btn-success mt-3">Go to Browse</a>
-      )}
-
-      {!!msg && <div className="alert alert-info mt-3">{msg}</div>}
+      {msg && <div className="alert alert-success mt-3">{msg}</div>}
+      {err && <div className="alert alert-danger mt-3">{err}</div>}
     </div>
   );
 }

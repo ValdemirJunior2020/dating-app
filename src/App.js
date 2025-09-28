@@ -1,9 +1,5 @@
 // src/App.js
 import React, { useEffect } from "react";
-// src/App.js
-// ...
-import Profile from "./pages/Profile.jsx"; // force .jsx so it can't pick the old one
-
 import { Routes, Route } from "react-router-dom";
 
 import NavBar from "./components/NavBar";
@@ -31,7 +27,10 @@ import Report from "./pages/Report";
 // New pages
 import Messages from "./pages/Messages";
 import Likes from "./pages/Likes";
-import Premium from "./pages/Premium"; // ← NEW
+import Premium from "./pages/Premium";
+
+// Force JSX version if you had a duplicate
+import Profile from "./pages/Profile.jsx";
 
 // Toaster + daily streak hook
 import { ToasterProvider } from "./components/Toaster";
@@ -70,7 +69,7 @@ function PresenceTicker() {
       clearInterval(iv);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [user?.uid]); // depend on uid
+  }, [user?.uid]);
 
   return null;
 }
@@ -129,7 +128,7 @@ export default function App() {
             }
           />
 
-          {/* Chat (support multiple param names for safety) */}
+          {/* Chat (accept several path shapes) */}
           <Route
             path="/chat"
             element={
@@ -181,7 +180,7 @@ export default function App() {
             }
           />
 
-          {/* Premium (Upgrade & Portal) */}
+          {/* Premium */}
           <Route
             path="/premium"
             element={
@@ -191,7 +190,7 @@ export default function App() {
             }
           />
 
-          {/* Profile editor (NEW) */}
+          {/* Profile editor */}
           <Route
             path="/profile"
             element={

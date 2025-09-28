@@ -1,18 +1,12 @@
 // src/pages/Login.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, Navigate, Link, useNavigate } from "react-router-dom";
-import { auth } from "../firebase";
+import { signInWithGoogle, auth } from "../firebase";
 import { useAuth } from "../context/AuthContext";
-import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  sendEmailVerification,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-} from "firebase/auth";
-import BrandName from "../components/BrandName";
+import { sendEmailVerification } from "firebase/auth";
+import { sendEduLink, completeEduLinkIfPresent } from "../lib/eduAuth";
+import BrandName from "../components/BrandName"; // cursive "Candle Love"
 
-// Friendlier messages for common popup errors
 const friendly = (code) => {
   switch (code) {
     case "auth/operation-not-allowed":
@@ -21,8 +15,6 @@ const friendly = (code) => {
       return "Your browser blocked the popup. Allow popups or try again.";
     case "auth/popup-closed-by-user":
       return "Sign-in popup closed. Please try again.";
-    case "auth/invalid-continue-uri":
-      return "The continue URL is not allowed. Add your live domain in Firebase Auth → Authorized domains.";
     default:
       return "Sign-in failed. Please try again.";
   }
@@ -35,44 +27,40 @@ export default function Login() {
 
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
-  const [email, setEmail] = useState("");
-  const [pwd, setPwd] = useState("");
+  const [eduEmail, setEduEmail] = useState("");
 
-  // allow viewing this page while signed in if ?force=1
   const params = new URLSearchParams(location.search);
   const force = params.get("force") === "1";
-
   const from = location.state?.from?.pathname || "/browse";
 
-  if (user && !force) return <Navigate to={from} replace />;
+  // Always call hooks before any early returns
+  useEffect(() => {
+    (async () => {
+      try {
+        const u = await completeEduLinkIfPresent();
+        if (u) {
+          setMsg("You're verified and signed in with your .edu email.");
+          navigate(from, { replace: true });
+        }
+      } catch (e) {
+        console.error(e);
+        setErr(e.message || "Failed to complete email link sign-in.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleGoogle() {
-    setMsg(""); setErr("");
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      // success navigates via your auth guard elsewhere; if not, you can:
-      // navigate(from, { replace: true });
-    } catch (e) {
-      console.error(e);
-      alert(friendly(e?.code));
+      await signInWithGoogle();
+    } catch (error) {
+      alert(friendly(error.code));
+      console.error(error);
     }
   }
 
   function goEmail() {
     navigate("/login-email", { state: { from: { pathname: from } } });
-  }
-
-  async function handleEmailPassword(e) {
-    e.preventDefault();
-    setMsg(""); setErr("");
-    try {
-      await signInWithEmailAndPassword(auth, email, pwd);
-      navigate(from, { replace: true });
-    } catch (e) {
-      console.error(e);
-      setErr(e?.message || "Sign-in failed.");
-    }
   }
 
   async function resendVerification() {
@@ -86,41 +74,34 @@ export default function Login() {
         setMsg("Your email is already verified.");
         return;
       }
-
-      // SAFEST: do not pass an actionCodeSettings URL (avoids invalid-continue-uri).
-      await sendEmailVerification(auth.currentUser);
-
-      // If you insist on a URL, ensure the domain is on Firebase Auth → Authorized domains:
-      // await sendEmailVerification(auth.currentUser, {
-      //   url: `${window.location.origin}/login`, // e.g. https://candlelove.club/login
-      //   handleCodeInApp: true,
-      // });
-
+      await sendEmailVerification(auth.currentUser, {
+        url: `${window.location.origin}/login`,
+        handleCodeInApp: true,
+      });
       setMsg("Verification email sent! Check your inbox.");
     } catch (e) {
       console.error(e);
-      setErr(e?.message || "Failed to send verification email.");
+      setErr(e.message || "Failed to send verification email.");
     }
   }
 
-  async function sendReset() {
+  async function handleSendEduLink(e) {
+    e.preventDefault();
     setMsg(""); setErr("");
     try {
-      if (!email) {
-        setErr("Enter your email first to receive a reset link.");
-        return;
-      }
-      // Same idea as above: omit actionCodeSettings to avoid continue-uri issues.
-      await sendPasswordResetEmail(auth, email);
-      setMsg("Password reset email sent.");
-    } catch (e) {
-      console.error(e);
-      setErr(e?.message || "Failed to send password reset email.");
+      await sendEduLink(eduEmail);
+      setMsg("Check your .edu inbox for the sign-in link.");
+    } catch (e2) {
+      console.error(e2);
+      setErr(e2.message || "Failed to send .edu link.");
     }
   }
 
   return (
     <main className="auth-page">
+      {/* Redirect after hooks are called, so ESLint is happy */}
+      {user && !force && <Navigate to={from} replace />}
+
       <div className="container bg-transparent">
         <div className="card shadow-sm p-4 auth-card mx-auto" style={{ maxWidth: 520 }}>
           <h1 className="mb-3 text-center fw-semibold" style={{ letterSpacing: ".2px" }}>
@@ -141,41 +122,29 @@ export default function Login() {
               type="button"
               className="btn btn-outline-secondary btn-lg"
               onClick={goEmail}
-              aria-label="Sign in with Email page"
+              aria-label="Sign in with Email"
             >
-              Sign in with Email (page)
+              Sign in with Email
             </button>
           </div>
 
-          <form onSubmit={handleEmailPassword} className="mb-2" style={{ display: "grid", gap: 8 }}>
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-              className="form-control"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={pwd}
-              onChange={(e) => setPwd(e.target.value)}
-              autoComplete="current-password"
-              required
-              className="form-control"
-            />
-            <button type="submit" className="btn btn-success">Sign In</button>
-          </form>
-
-          <div className="d-flex gap-2">
-            <button type="button" onClick={sendReset} className="btn btn-outline-light btn-sm">
-              Send password reset
-            </button>
-            <button type="button" onClick={resendVerification} className="btn btn-outline-light btn-sm">
-              Resend verification email
-            </button>
+          {/* .EDU Verification */}
+          <div className="border-top pt-3 mt-3">
+            <h6 className="mb-2">Verify your <code>.edu</code> email</h6>
+            <form onSubmit={handleSendEduLink} className="d-flex gap-2">
+              <input
+                type="email"
+                required
+                className="form-control"
+                placeholder="you@college.edu"
+                value={eduEmail}
+                onChange={(e) => setEduEmail(e.target.value)}
+              />
+              <button className="btn btn-success" type="submit">Send link</button>
+            </form>
+            <small className="text-muted d-block mt-2">
+              You’ll receive a sign-in link. Opening it proves you control that .edu inbox.
+            </small>
           </div>
 
           <div className="text-center mt-3">
@@ -183,6 +152,16 @@ export default function Login() {
               New here? <Link to="/signup">Create account</Link> ·{" "}
               <Link to="/reset">Forgot password?</Link>
             </small>
+          </div>
+
+          <div className="text-center mt-3">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-light"
+              onClick={resendVerification}
+            >
+              Resend verification email
+            </button>
           </div>
 
           {msg && <div className="alert alert-success mt-3">{msg}</div>}

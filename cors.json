@@ -1,14 +1,11 @@
 [
   {
-    "origin": ["http://localhost:3000", "https://www.candlelove.club"],
-    "method": ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS"],
+    "origin": ["http://localhost:3000","https://www.candlelove.club"],
+    "method": ["GET","HEAD","PUT","POST","DELETE","OPTIONS"],
     "responseHeader": [
-      "Authorization",
-      "Content-Type",
-      "x-goog-upload-protocol",
-      "x-goog-upload-command",
-      "x-goog-upload-file-name",
-      "x-goog-upload-offset",
+      "Authorization","Content-Type",
+      "x-goog-upload-protocol","x-goog-upload-command",
+      "x-goog-upload-file-name","x-goog-upload-offset",
       "x-firebase-storage-version"
     ],
     "maxAgeSeconds": 3600
