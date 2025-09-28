@@ -61,11 +61,7 @@
   .content-offset { padding-top: 64px; }
 }
 
-html[data-season="spring"] body { background-image: url("/bg/spring.jpg"); }
-html[data-season="summer"] body { background-image: url("/bg/summer.jpg"); }
-html[data-season="fall"]   body { background-image: url("/bg/fall.jpg"); }
-html[data-season="winter"] body { background-image: url("/bg/winter.jpg"); }
-
+/* src/styles/global.css */
 body {
   background-size: cover;
   background-position: center;

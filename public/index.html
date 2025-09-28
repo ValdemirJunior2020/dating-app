@@ -32,14 +32,42 @@
   }
   try { localStorage.removeItem('firebase:appCheckDebugToken'); } catch (e) {}
 </script>
+<!-- Decide season and mark <html> -->
 <script>
   (function () {
-    const m = new Date().getMonth() + 1;
-    let s = "winter";
+    var m = new Date().getMonth() + 1; // 1..12
+    var s = "winter";
     if (m >= 3 && m <= 5) s = "spring";
     else if (m >= 6 && m <= 8) s = "summer";
     else if (m >= 9 && m <= 11) s = "fall";
     document.documentElement.setAttribute("data-season", s);
+  })();
+</script>
+
+<!-- Apply background image from /public at runtime (no bundler resolution) -->
+<script>
+  (function () {
+    var s = document.documentElement.getAttribute("data-season") || "winter";
+    var map = {
+      spring: "/bg/spring.jpg",
+      summer: "/bg/summer.jpg",
+      fall:   "/bg/fall.jpg",
+      winter: "/bg/winter.jpg",
+    };
+    var url = map[s] || map.winter;
+
+    function apply() {
+      document.body.style.backgroundImage = "url('" + url + "')";
+      document.body.style.backgroundSize = "cover";
+      document.body.style.backgroundPosition = "center";
+      document.body.style.backgroundAttachment = "fixed";
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", apply);
+    } else {
+      apply();
+    }
   })();
 </script>
 
