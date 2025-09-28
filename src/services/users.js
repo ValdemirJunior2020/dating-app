@@ -1,91 +1,54 @@
 // src/services/users.js
-import {
-  doc,
-  getDoc,
-  setDoc,
-  onSnapshot,
-  collection,
-  addDoc,
-  deleteDoc,
-  serverTimestamp,
-  orderBy,
-  query,
-  getDocs,
-} from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { auth, db, storage } from "../firebase";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../firebase";
 
-/** ----------------- Profiles ----------------- **/
+/**
+ * Shape we expect on /users/{uid}
+ * We keep this small; expand as needed.
+ */
+export const emptyUser = (uid) => ({
+  uid,
+  displayName: "",
+  bio: "",
+  interests: [],
+  photos: [],
+  // helps with ordering and index-friendly queries
+  updatedAt: serverTimestamp(),
+});
 
-export async function getMyProfile() {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("Not signed in");
-  const refDoc = doc(db, "users", uid);
-  const snap = await getDoc(refDoc);
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+/** Ensure the doc exists with a sane baseline (idempotent). */
+export async function ensureUserDoc(uid) {
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, emptyUser(uid));
+  }
+  return ref;
 }
 
-export async function updateMyProfile(partial) {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("Not signed in");
-  const refDoc = doc(db, "users", uid);
-  await setDoc(
-    refDoc,
-    { ...partial, updatedAt: serverTimestamp() },
-    { merge: true }
-  );
+/** Load current user profile (returns {exists, data} minimal wrapper). */
+export async function getUserProfile(uid) {
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  return { exists: snap.exists(), data: snap.exists() ? snap.data() : null };
 }
 
-/** ----------------- Public Photos ----------------- **/
-
-export function listenMyPublicPhotos(cb) {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("Not signed in");
-  const col = collection(db, "users", uid, "public_photos");
-  const q = query(col, orderBy("createdAt", "desc"));
-  return onSnapshot(q, (snap) => {
-    const items = [];
-    snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
-    cb(items);
-  });
-}
-
-export async function addPublicPhoto(file, { caption = "" } = {}) {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("Not signed in");
-
-  const colRef = collection(db, "users", uid, "public_photos");
-  const current = await getDocCount(colRef);
-  if (current >= 6) throw new Error("You can upload at most 6 photos.");
-
-  const path = `users/${uid}/public/${Date.now()}_${file.name}`;
-  const sref = ref(storage, path);
-  await uploadBytes(sref, file);
-  const url = await getDownloadURL(sref);
-
-  await addDoc(colRef, {
-    owner: uid,
-    url,
-    caption: (caption || "").slice(0, 140),
-    createdAt: serverTimestamp(),
+/** Patch fields and bump updatedAt. (No merge-deep—pass full arrays). */
+export async function updateUserProfile(uid, patch) {
+  const ref = doc(db, "users", uid);
+  await updateDoc(ref, {
+    ...patch,
     updatedAt: serverTimestamp(),
   });
-
-  return url;
 }
 
-async function getDocCount(colRef) {
-  const snap = await getDocs(colRef);
-  return snap.size;
-}
-
-export async function deletePublicPhotoDoc(photo) {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("Not signed in");
-  if (!photo?.id) throw new Error("Missing photo id");
-  await deleteDoc(doc(db, "users", uid, "public_photos", photo.id));
-}
-
-export async function setMainPhoto(url) {
-  await updateMyProfile({ photoURL: url });
+/** Helper: wait for signed-in UID once. */
+export function getCurrentUid() {
+  return new Promise((resolve) => {
+    const off = onAuthStateChanged(auth, (u) => {
+      off();
+      resolve(u?.uid || null);
+    });
+  });
 }
